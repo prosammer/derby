@@ -2,9 +2,9 @@ use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 
-pub async fn get_gpt_response(user_speech_to_text: String) -> Result<ChatCompletionRequestMessage, Error> {
+pub fn get_gpt_response(user_speech_to_text: String) -> Result<ChatCompletionRequestMessage, Error> {
 
-    let mut messages = messages_setup().await;
+    let mut messages = messages_setup();
     messages.push(create_chat_completion_request_msg(user_speech_to_text, Role::User));
 
     let client = Client::new();
@@ -15,7 +15,7 @@ pub async fn get_gpt_response(user_speech_to_text: String) -> Result<ChatComplet
         .messages(messages.clone())
         .build()?;
 
-    let resp = client.chat().create(request).await?;
+    let resp = tokio::runtime::Runtime::new().unwrap().block_on(client.chat().create(request))?;
 
     let resp_message = resp.choices.get(0).unwrap().message.clone();
 
@@ -38,13 +38,15 @@ pub fn create_chat_completion_request_msg(content: String, role: Role) -> ChatCo
 }
 
 
-pub async fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
-    let system_message_content = "You are an AI personal routine trainer. You greet the user in the morning, then go through the user-provided morning routine checklist and ensure that the user completes each task on the list in order. Make sure to keep your tone positive, but it is vital that the user completes each task - do not allow them to 'skip' tasks. The user uses speech-to-text to communicate, so some of their messages may be incorrect - if some text seems out of place, please ignore it. If the users sentence makes no sense in the context, tell them you don't understand and ask them to repeat themselves. If you receive any text like [SILENCE] or [MUSIC] please respond with - I didn't catch that. The following message is the prompt the user provided - their morning checklist. Call the leave_conversation function when the user has completed their morning routine, or whenever the AI would normally say goodbye";
+pub fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
+    let system_message_content = "This is an AI macos app where the user asks for the AI to write some text via speech-to-text, and then the text is pasted into the field that they currently have selected.\
+     The user uses speech-to-text to communicate, so some of their messages may be incorrect - make assumptions based on this.\
+      Ensure that your output is just the output they requested - do not ask any follow up questions or include any extra text.";
     let system_message = create_chat_completion_request_msg(system_message_content.to_string(), Role::System);
 
     // let user_prompt_content = get_from_store(handle, "userPrompt").unwrap_or("".to_string());
-    let user_prompt_message = create_chat_completion_request_msg("user_prompt_content".to_string(), Role::System);
+    // let user_prompt_message = create_chat_completion_request_msg("user_prompt_content".to_string(), Role::System);
 
-    return vec![system_message, user_prompt_message]
+    return vec![system_message]
 }
 
