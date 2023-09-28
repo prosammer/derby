@@ -1,6 +1,7 @@
-# Sigma
-A minimalist macos menu bar app that reminds you to record a video journal every day. 
-Sigma is an open source project built with Svelte and Tauri.
+# Octoguide
+A super-fast macos menu bar app that lets you access GPT models with your voice.
+
+Octoguide is built with Rust and Tauri.
 
 ## Downloading
 
