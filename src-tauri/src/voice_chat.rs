@@ -35,9 +35,11 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
         }
     }
 
-    println!("{}", user_speech_to_text_clone.lock().unwrap());
+    println!("User Speech: {}", user_speech_to_text_clone.lock().unwrap());
+
     // finally, the entire_text is sent to GPT and the response is copy/pasted
-    // let gpt_response = get_gpt_response(user_speech_to_text.lock().unwrap().clone()).expect("Failed to get GPT response");
+    let gpt_response = get_gpt_response(user_speech_to_text.lock().unwrap().clone()).expect("Failed to get GPT response");
+    println!("GPT Response: {}", gpt_response.content.as_ref().unwrap());
     // pbcopy the gpt_response
 }
 
