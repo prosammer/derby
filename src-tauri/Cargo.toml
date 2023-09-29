@@ -41,7 +41,6 @@ samplerate = "0.2.4"
 once_cell = "1.18.0"
 global-hotkey = "0.3.0"
 repng = "0.2.2"
-screenshots = "0.8.3"
 swift-rs = "1.0.6"
 
 [features]

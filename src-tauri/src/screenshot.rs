@@ -1,7 +1,7 @@
-use screenshots::Screen;
 use swift_rs::{SRArray, SRString, swift, SRObject};
+use anyhow::{Result, anyhow};
 
-swift!(fn recognize_text(path_srstring: &SRString) -> SRObject<RustResponse>);
+swift!(fn screenshot_ocr() -> SRObject<RustResponse>);
 
 #[repr(C)]
 struct RustResponse {
@@ -9,30 +9,19 @@ struct RustResponse {
     content: SRArray<SRString>
 }
 
+pub fn ocr_screenshot() -> Result<Vec<String>> {
+    let rust_response = unsafe { screenshot_ocr() };
 
-
-pub fn take_screenshot(path: &String) {
-    // TODO: Capture only the relevant parts of the screen via the frontmost window coords?
-    let screens = Screen::all().unwrap();
-
-    let selected_screen = screens.get(0).unwrap();
-    println!("capturer {selected_screen:?}");
-    let mut image = selected_screen.capture().unwrap();
-    image
-        .save(path)
-        .unwrap();
-}
-
-pub fn ocr_screenshot(path: &str) {
-    let path: SRString = path.into();
-    let rust_response = unsafe { recognize_text(&path) };
-
+    let mut response = Vec::new();
     if rust_response.success {
         println!("Response: {}", rust_response.success);
         for sr_string in rust_response.content.as_slice() {
             println!("Response: {}", sr_string.as_str());
+            response.push(sr_string.as_str().to_string());
         }
     } else {
-        println!("Response returned false");
+        return Err(anyhow!("Swift returned false"));
     }
+
+    return Ok(response);
 }

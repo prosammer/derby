@@ -2,9 +2,10 @@ use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 
-pub fn get_gpt_response(user_speech_to_text: String) -> Result<ChatCompletionRequestMessage, Error> {
+pub fn get_gpt_response(window_text: String, user_speech_to_text: String) -> Result<ChatCompletionRequestMessage, Error> {
 
     let mut messages = messages_setup();
+    messages.push(create_chat_completion_request_msg(window_text, Role::User));
     messages.push(create_chat_completion_request_msg(user_speech_to_text, Role::User));
 
     let client = Client::new();
