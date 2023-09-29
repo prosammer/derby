@@ -11,21 +11,36 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
-use swift_rs::{Int, swift};
+use swift_rs::{ SRArray, SRObject, SRString, swift};
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri_plugin_autostart::MacosLauncher;
 
 use crate::voice_chat::user_speech_to_gpt_response;
 
+swift!(fn recognize_text(path_srstring: &SRString) -> SRObject<RustResponse>);
+
+#[repr(C)]
+struct RustResponse {
+    success: bool,
+    content: SRArray<SRString>
+}
+
 fn main() {
     dotenv().ok();
 
-    swift!(fn square_number(number:Int) -> Int);
+    let path: SRString = "/Users/samfinton/Documents/Programming/swift_ocr/test.png".into();
+    let rust_response = unsafe { recognize_text(&path) };
 
-    let input: Int = 4;
-    let output: Int = unsafe { square_number(input) };
 
-    println!("Input: {}, Squared: {}", input, output);
+    if rust_response.success {
+        println!("Response: {}", rust_response.success);
+        for sr_string in rust_response.content.as_slice() {
+            println!("Response: {}", sr_string.as_str());
+        }
+    } else {
+        println!("Response returned false");
+    }
+
     let record = CustomMenuItem::new("talk".to_string(), "Talk");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
