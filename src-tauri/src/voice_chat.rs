@@ -4,6 +4,7 @@ use std::thread::spawn;
 use tauri::{AppHandle};
 use crate::whisper;
 use crate::gpt::get_gpt_response;
+use crate::screenshot::take_screenshot;
 use crate::whisper::WHISPER_CONTEXT;
 
 pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
@@ -12,6 +13,12 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     let user_speech_to_text = Arc::new(Mutex::new(String::new()));
     let user_speech_to_text_clone = user_speech_to_text.clone();
 
+    // take a screenshot
+
+    take_screenshot();
+    // ocr the screenshot
+    
+    // include the ocr text in the prompt
 
     whisper::init_whisper_context();
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");

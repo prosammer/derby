@@ -5,11 +5,13 @@ mod stores;
 mod audio_utils;
 mod voice_chat;
 mod gpt;
+mod screenshot;
 
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
+use swift_rs::{Int, swift};
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -18,6 +20,12 @@ use crate::voice_chat::user_speech_to_gpt_response;
 fn main() {
     dotenv().ok();
 
+    swift!(fn square_number(number:Int) -> Int);
+
+    let input: Int = 4;
+    let output: Int = unsafe { square_number(input) };
+
+    println!("Input: {}, Squared: {}", input, output);
     let record = CustomMenuItem::new("talk".to_string(), "Talk");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
