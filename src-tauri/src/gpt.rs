@@ -2,10 +2,7 @@ use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 
-pub fn get_gpt_response(user_speech_to_text: String) -> Result<ChatCompletionRequestMessage, Error> {
-
-    let mut messages = messages_setup();
-    messages.push(create_chat_completion_request_msg(user_speech_to_text, Role::User));
+pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>) -> Result<ChatCompletionRequestMessage, Error> {
 
     let client = Client::new();
 
@@ -41,7 +38,9 @@ pub fn create_chat_completion_request_msg(content: String, role: Role) -> ChatCo
 pub fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
     let system_message_content = "This is an AI macos app where the user asks for the AI to write some text via speech-to-text, and then the text is pasted into the field that they currently have selected.\
      The user uses speech-to-text to communicate, so some of their messages may be incorrect - make assumptions based on this.\
-      Ensure that your output is just the output they requested - do not ask any follow up questions or include any extra text.";
+      Ensure that your output is just the output they requested - do not ask any follow up questions or include any extra text.\
+      The next message is the OCRd text from the users active window - use it to provide context for the user.\
+      The message after that is the user's prompt - respond to this";
     let system_message = create_chat_completion_request_msg(system_message_content.to_string(), Role::System);
 
     // let user_prompt_content = get_from_store(handle, "userPrompt").unwrap_or("".to_string());
