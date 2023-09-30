@@ -14,9 +14,7 @@ pub fn ocr_screenshot() -> Result<Vec<String>> {
 
     let mut response = Vec::new();
     if rust_response.success {
-        println!("Response: {}", rust_response.success);
         for sr_string in rust_response.content.as_slice() {
-            println!("Response: {}", sr_string.as_str());
             response.push(sr_string.as_str().to_string());
         }
     } else {

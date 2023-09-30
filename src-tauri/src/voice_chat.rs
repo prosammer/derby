@@ -1,13 +1,18 @@
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::channel;
 use std::thread::spawn;
+use async_openai::types::Role;
+use futures::executor::block_on;
 use tauri::{AppHandle};
-use crate::whisper;
-use crate::gpt::get_gpt_response;
+use crate::{gpt, whisper};
+use crate::gpt::{get_gpt_response, messages_setup};
 use crate::screenshot::{ocr_screenshot};
+use crate::text_to_speech::{text_to_speech};
 use crate::whisper::WHISPER_CONTEXT;
 
 pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
+    let mut messages = messages_setup();
+
     let (audio_tx, audio_rx) = channel();
 
     let user_speech_to_text = Arc::new(Mutex::new(String::new()));
@@ -16,6 +21,10 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     // ocr the screenshot
     let window_text_list = ocr_screenshot().unwrap();
     let window_text = window_text_list.join(" ");
+    println!("{}", window_text);
+
+    messages.push(gpt::create_chat_completion_request_msg(window_text, Role::User));
+
 
 
     // include the ocr text in the prompt
@@ -43,10 +52,17 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     }
 
     println!("User Speech: {}", user_speech_to_text_clone.lock().unwrap());
+    messages.push(gpt::create_chat_completion_request_msg(user_speech_to_text_clone.lock().unwrap().clone(), Role::User));
+
 
     // finally, the entire_text is sent to GPT and the response is copy/pasted
-    let gpt_response = get_gpt_response(window_text, user_speech_to_text.lock().unwrap().clone()).expect("Failed to get GPT response");
+    let gpt_response = get_gpt_response(messages).expect("Failed to get GPT response");
     println!("GPT Response: {}", gpt_response.content.as_ref().unwrap());
+    let async_handle = tauri::async_runtime::spawn(async move {
+        text_to_speech("pMsXgVXv3BLzUgSXRplE", gpt_response.content.as_ref().unwrap().to_string()).await;
+    });
+
+    block_on(async_handle).expect("TODO: panic message");
     // pbcopy the gpt_response
 }
 

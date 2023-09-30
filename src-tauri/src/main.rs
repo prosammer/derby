@@ -6,6 +6,7 @@ mod audio_utils;
 mod voice_chat;
 mod gpt;
 mod screenshot;
+mod text_to_speech;
 
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -37,7 +38,7 @@ fn main() {
         .setup( |app| {
             let app_handle = app.handle();
             let (shortcut_pressed_tx, shortcut_pressed_rx) = channel();
-            app_handle.global_shortcut_manager().register("CommandOrControl+Shift+D", move || {
+            app_handle.global_shortcut_manager().register("F5", move || {
                 shortcut_pressed_tx.send(true).unwrap();
                 println!("Shortcut pressed")
             }).unwrap();
