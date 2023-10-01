@@ -12,7 +12,7 @@
   },
   "tauri": {
     "systemTray": {
-      "iconPath": "icons/sigma_master_512.png",
+      "iconPath": "resources/assets/images/sigma_master_512.png",
       "iconAsTemplate": false
     },
     "allowlist": {
@@ -58,7 +58,9 @@
       },
       "resources": [
         "resources/ggml-base.en.bin",
-        "resources/swift_ocr/*"
+        "resources/swift_ocr/*",
+        "resources/assets/audio/*",
+        "resources/assets/images/*"
       ],
       "shortDescription": "",
       "targets": "all",
