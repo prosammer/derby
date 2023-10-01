@@ -18,9 +18,9 @@ use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_a
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
-const APP_ICON_DEFAULT: &str = "resources/assets/images/sigma_master_512.png";
-const APP_ICON_RECORDING: &str = "resources/assets/images/sigma_master_512_green.png";
-const SESSION_START_SOUND_PATH: &str = "resources/assets/audio/session_complete.wav";
+const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
+const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_512_green.png";
+const SESSION_START_SOUND_PATH: &str = "resources/assets/session_start.wav";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
@@ -40,13 +40,18 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 }
 
 
-pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, tray_handle: SystemTrayHandle) {
+pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, app_handle: AppHandle) {
     let (config, mut consumer, input_stream) = setup_audio().expect("Failed to setup audio");
 
     // Ensure the initial speech is finished before starting the input stream
     input_stream.play().expect("Failed to play input stream");
-    set_icon(APP_ICON_RECORDING, &tray_handle);
-    play_audio_from_wav(PathBuf::from(SESSION_START_SOUND_PATH));
+    set_icon(APP_ICON_RECORDING, &app_handle.tray_handle());
+
+    let start_sound_path = app_handle.path_resolver()
+        .resolve_resource(SESSION_START_SOUND_PATH)
+        .expect("Failed to resolve session start sound resource path");
+
+    play_audio_from_wav(start_sound_path);
     // Remove the initial samples
     consumer.clear();
     loop {
@@ -67,7 +72,7 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
             break;
         }
     }
-    set_icon(APP_ICON_DEFAULT, &tray_handle);
+    set_icon(APP_ICON_DEFAULT, &app_handle.tray_handle());
 }
 
 fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<MaybeUninit<f32>>>>>, Stream), Error> {

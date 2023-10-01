@@ -145,6 +145,12 @@ pub fn resample_audio(input: Vec<f32>, from_rate: usize, to_rate: usize) -> Resu
 }
 
 pub fn play_audio_from_wav(path: PathBuf) {
+    if !path.exists() || !path.is_file() {
+        println!("This was the path given: {:?}", path);
+        println!("File does not exist or is not a file");
+        return;
+    }
+
     let mut file = File::open(path).unwrap();
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
@@ -160,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_play_audio() {
-        let mut file = File::open("../assets/audio/test.wav").unwrap();
+        let mut file = File::open("../assets/test.wav").unwrap();
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).unwrap();
         play_audio_bytes(Bytes::from(buffer));
