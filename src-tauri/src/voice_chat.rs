@@ -33,8 +33,9 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     println!("Initialization complete, starting audio thread");
     // start cpal audio recording to channel
     // when the hotkey_rx receives a message, the audio thread is stopped.
+    let tray_handle = handle.tray_handle().clone();
     spawn(|| {
-        whisper::send_system_audio_to_channel(audio_tx, hotkey_count);
+        whisper::send_system_audio_to_channel(audio_tx, hotkey_count, tray_handle);
     });
 
     // This will keep looping until the hotkey is pressed again (there is nothing in the channel)
