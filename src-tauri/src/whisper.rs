@@ -13,13 +13,14 @@ use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
+use std::thread::spawn;
 use tauri::{AppHandle, Icon, SystemTrayHandle};
 use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_audio_from_wav};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
-const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_512_green.png";
+const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_green_512.png";
 const SESSION_START_SOUND_PATH: &str = "resources/assets/session_start.wav";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
@@ -47,9 +48,12 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
         .resolve_resource(SESSION_START_SOUND_PATH)
         .expect("Failed to resolve session start sound resource path");
 
+    let tray_handle = app_handle.tray_handle();
+    spawn(move || {
+        set_icon(APP_ICON_RECORDING, &tray_handle, false);
+    });
     play_audio_from_wav(start_sound_path);
 
-    set_icon(APP_ICON_RECORDING, &app_handle.tray_handle());
     loop {
         // check if the hotkey has been pressed twice
         if hotkey_count.lock().unwrap().clone() % 2 == 0 {
@@ -68,7 +72,10 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
             break;
         }
     }
-    set_icon(APP_ICON_DEFAULT, &app_handle.tray_handle());
+    let tray_handle = app_handle.tray_handle();
+    spawn(move || {
+        set_icon(APP_ICON_DEFAULT, &tray_handle, true);
+    });
 }
 
 fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<MaybeUninit<f32>>>>>, Stream), Error> {
@@ -114,11 +121,14 @@ fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<Ma
     Ok((config, consumer, input_stream))
 }
 
-fn set_icon(path_str: &str, tray_handle: &SystemTrayHandle) {
+fn set_icon(path_str: &str, tray_handle: &SystemTrayHandle, template: bool) {
     let icon_path = PathBuf::from(path_str);
     if icon_path.exists() && icon_path.is_file() {
         let icon = Icon::File(icon_path);
+        tray_handle.set_icon_as_template(template).expect("Failed to set icon as template");
         tray_handle.set_icon(icon).expect("Failed to set icon");
+    } else {
+        println!("Icon path does not exist: {}", path_str);
     }
 }
 

@@ -4,7 +4,6 @@ use std::thread::spawn;
 use async_openai::types::Role;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{play_audio_f32_vec};
 use crate::gpt::{get_gpt_response, messages_setup};
 use crate::screenshot::{ocr_screenshot};
 use crate::text_to_speech::{speak_string};
