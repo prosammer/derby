@@ -24,8 +24,8 @@ pub fn init_whisper_context() {
     if !whisper_path.exists() && !whisper_path.is_file() {
         panic!("expected a whisper directory")
     }
-    let ctx = WhisperContext::new(whisper_path_str).expect("Failed to open model");
     if WHISPER_CONTEXT.get().is_none() {
+        let ctx = WhisperContext::new(whisper_path_str).expect("Failed to open model");
         WHISPER_CONTEXT.set(ctx).expect("Failed to set WhisperContext");
     }
 }

@@ -80,6 +80,9 @@ fn main() {
                                 let _window = create_settings_window(&app_handle);
                             }
                         }
+                        "quit" => {
+                            app_handle.exit(0);
+                        }
                         _ => {}
                     }
                 }
