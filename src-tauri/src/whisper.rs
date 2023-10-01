@@ -8,15 +8,12 @@ use ringbuf::{Consumer, SharedRb};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
 use anyhow::Error;
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
-use crate::audio_utils;
-use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder};
+use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_audio_from_wav};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
@@ -39,34 +36,25 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
 
     // Ensure the initial speech is finished before starting the input stream
     input_stream.play().expect("Failed to play input stream");
+    play_audio_from_wav(PathBuf::from("assets/audio/session_complete.wav"));
+
     // Remove the initial samples
     consumer.clear();
-    sleep(Duration::from_millis(2000));
-
     loop {
-        let samples: Vec<f32> = consumer.iter().map(|x| *x).collect();
-        // TODO: Instead of removing every second sample, just set the input data fn to only push every second sample
-        let samples = convert_stereo_to_mono_audio(samples).unwrap();
-        let mut samples = make_audio_louder(&samples, 2.0);
-
-        let sampling_freq = config.sample_rate.0 as f32 / 2.0; // TODO: Divide by 2 because of stereo to mono
-
-        if audio_utils::vad_simple(&mut samples, sampling_freq as usize, 1000) {
-            // the last 1000ms of audio was silent and there was talking before it
-            println!("Speech detected!");
-            audio_tx.send(samples).expect("Failed to send audio to channel");
-            consumer.clear();
-        } else {
-            // Else, there is just silence. The samples should be deleted
-            println!("Silence Detected!");
-            sleep(Duration::from_secs(1));
-            // drop the oldest second of audio
-            consumer.pop_iter().take(1000).for_each(drop);
-        }
-
+        // check if the hotkey has been pressed twice
         if hotkey_count.lock().unwrap().clone() % 2 == 0 {
             println!("Hotkey pressed, stopping audio");
             input_stream.pause().expect("Failed to pause input stream");
+
+            let samples: Vec<f32> = consumer.pop_iter().collect();
+            // TODO: Instead of removing every second sample, just set the input data fn to only push every second sample
+            let samples = convert_stereo_to_mono_audio(samples).unwrap();
+            let samples = make_audio_louder(&samples, 2.0);
+
+            let sampling_freq = config.sample_rate.0 as f32 / 2.0; // TODO: Divide by 2 because of stereo to mono
+
+            audio_tx.send(samples).expect("Failed to send audio to channel");
+
             break;
         }
     }

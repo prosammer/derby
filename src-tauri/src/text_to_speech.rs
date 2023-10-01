@@ -1,23 +1,48 @@
-use std::collections::HashMap;
-use std::env;
-use anyhow::Result;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
 
-use bytes::Bytes;
-use reqwest::Error;
+#[cfg(target_os = "macos")]
+use cocoa_foundation::base::id;
+#[cfg(target_os = "macos")]
+use cocoa_foundation::foundation::NSDefaultRunLoopMode;
+#[cfg(target_os = "macos")]
+use cocoa_foundation::foundation::NSRunLoop;
+#[cfg(target_os = "macos")]
+use objc::class;
+#[cfg(target_os = "macos")]
+use objc::{msg_send, sel, sel_impl};
 
-pub async fn text_to_speech(voice_id: &str, text: String) -> Result<Bytes, Error> {
-    let url = format!("https://api.elevenlabs.io/v1/text-to-speech/{}/stream", voice_id);
-    let mut data = HashMap::new();
-    data.insert("text", text);
-    let api_key = env::var("ELEVEN_LABS_API_KEY").expect("ELEVEN_LABS_API_KEY must be set");
-    let client = reqwest::Client::new();
-    let res = client.post(&url)
-        .header("Accept", "audio/mpeg")
-        .header("Content-Type", "application/json")
-        .header("xi-api-key", api_key)
-        .json(&data)
-        .send()
-        .await?;
+use tts::{Features, Tts};
 
-    return Ok(res.bytes().await?);
+pub fn speak_string(text: String) {
+    let (speaking_channel_tx, speaking_channel_rx) = channel();
+    let speaking_channel_tx_clone = Arc::new(Mutex::new(speaking_channel_tx));
+
+    let mut tts = Tts::default()?;
+    let Features {
+        utterance_callbacks,
+        ..
+    } = tts.supported_features();
+
+    if utterance_callbacks {
+        tts.on_utterance_begin(Some(Box::new(|utterance| {
+            println!("Started speaking {:?}", utterance)
+        })))?;
+        tts.on_utterance_end(Some(Box::new(move |utterance| {
+            println!("Finished speaking {:?}", utterance);
+            speaking_channel_tx_clone.lock().unwrap().send(true).unwrap();
+        })))?;
+    }
+
+    tts.speak(text, false)?;
+    #[cfg(target_os = "macos")]
+    {
+        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
+        unsafe {
+            let date: id = msg_send![class!(NSDate), distantFuture];
+            let _: () = msg_send![run_loop, runMode:NSDefaultRunLoopMode beforeDate:date];
+        }
+    }
+    speaking_channel_rx.recv().unwrap();
+    println!("speaking done");
 }

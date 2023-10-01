@@ -93,6 +93,7 @@ dependencies = [
  "async-stream",
  "bytes",
  "chrono",
+ "cocoa-foundation",
  "cpal",
  "dirs 5.0.1",
  "dotenv",

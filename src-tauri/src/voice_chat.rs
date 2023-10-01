@@ -2,12 +2,12 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::channel;
 use std::thread::spawn;
 use async_openai::types::Role;
-use futures::executor::block_on;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
+use crate::audio_utils::{play_audio_f32_vec};
 use crate::gpt::{get_gpt_response, messages_setup};
 use crate::screenshot::{ocr_screenshot};
-use crate::text_to_speech::{text_to_speech};
+use crate::text_to_speech::{speak_string};
 use crate::whisper::WHISPER_CONTEXT;
 
 pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
@@ -26,9 +26,6 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     messages.push(gpt::create_chat_completion_request_msg(window_text, Role::User));
 
 
-
-    // include the ocr text in the prompt
-
     whisper::init_whisper_context();
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");
     let mut state = ctx.create_state().expect("failed to create key");
@@ -44,6 +41,7 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     loop {
         if let Ok(audio) = audio_rx.recv() {
             println!("Received audio");
+            play_audio_f32_vec(audio.clone(), 24000);
             let text = whisper::speech_to_text(&audio, &mut state);
             user_speech_to_text_clone.lock().unwrap().push_str(&text);
         } else {
@@ -58,11 +56,7 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     // finally, the entire_text is sent to GPT and the response is copy/pasted
     let gpt_response = get_gpt_response(messages).expect("Failed to get GPT response");
     println!("GPT Response: {}", gpt_response.content.as_ref().unwrap());
-    let async_handle = tauri::async_runtime::spawn(async move {
-        text_to_speech("pMsXgVXv3BLzUgSXRplE", gpt_response.content.as_ref().unwrap().to_string()).await;
-    });
-
-    block_on(async_handle).expect("TODO: panic message");
+    speak_string(gpt_response.content.as_ref().unwrap().clone());
     // pbcopy the gpt_response
 }
 
