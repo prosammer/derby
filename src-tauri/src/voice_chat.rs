@@ -45,7 +45,6 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     loop {
         if let Ok(audio) = audio_rx.recv() {
             println!("Received audio");
-            play_audio_f32_vec(audio.clone(), 24000);
             let text = whisper::speech_to_text(&audio, &mut state);
             user_speech_to_text_clone.lock().unwrap().push_str(&text);
         } else {
