@@ -12,8 +12,8 @@
   },
   "tauri": {
     "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
+      "iconPath": "icons/sigma_master_512.png",
+      "iconAsTemplate": false
     },
     "allowlist": {
       "all": false,
@@ -56,7 +56,10 @@
         "signingIdentity": null,
         "minimumSystemVersion": "12"
       },
-      "resources": [],
+      "resources": [
+        "resources/ggml-base.en.bin",
+        "resources/swift_ocr/*"
+      ],
       "shortDescription": "",
       "targets": "all",
       "windows": {

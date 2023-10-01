@@ -3,7 +3,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_store::{StoreCollection, with_store};
 
-pub fn get_from_store(handle: AppHandle, key: &str) -> Option<String>{
+pub fn get_from_store(handle: &AppHandle, key: &str) -> Option<String>{
     let stores = handle.state::<StoreCollection<Wry>>();
     let path = PathBuf::from(".settings.dat");
 
@@ -22,7 +22,7 @@ pub fn get_from_store(handle: AppHandle, key: &str) -> Option<String>{
     retrieved
 }
 
-pub fn set_in_store(handle: AppHandle, key: String, value: Value) {
+pub fn set_in_store(handle: &AppHandle, key: String, value: Value) {
     let stores = handle.state::<StoreCollection<Wry>>();
     let path = PathBuf::from(".settings.dat");
 

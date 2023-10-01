@@ -10,7 +10,7 @@ use crate::screenshot::{ocr_screenshot};
 use crate::text_to_speech::{speak_string};
 use crate::whisper::WHISPER_CONTEXT;
 
-pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
+pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
     let mut messages = messages_setup();
 
     let (audio_tx, audio_rx) = channel();
@@ -19,24 +19,27 @@ pub fn user_speech_to_gpt_response(handle: AppHandle, hotkey_count: Arc<Mutex<i3
     let user_speech_to_text_clone = user_speech_to_text.clone();
 
     // ocr the screenshot
-    let window_text_list = ocr_screenshot().unwrap();
-    let window_text = window_text_list.join(" ");
-    println!("{}", window_text);
+    let ocr_thread = spawn(|| {
+        ocr_screenshot()
+    });
 
-    messages.push(gpt::create_chat_completion_request_msg(window_text, Role::User));
-
-
-    whisper::init_whisper_context();
+    whisper::init_whisper_context(&app_handle);
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");
     let mut state = ctx.create_state().expect("failed to create key");
 
     println!("Initialization complete, starting audio thread");
     // start cpal audio recording to channel
     // when the hotkey_rx receives a message, the audio thread is stopped.
-    let tray_handle = handle.tray_handle().clone();
+    let tray_handle = app_handle.tray_handle().clone();
     spawn(|| {
         whisper::send_system_audio_to_channel(audio_tx, hotkey_count, tray_handle);
     });
+
+    let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();
+    let window_ocr_text = window_ocr_text_list.join(" ");
+    println!("{}", window_ocr_text);
+    messages.push(gpt::create_chat_completion_request_msg(window_ocr_text, Role::User));
+
 
     // This will keep looping until the hotkey is pressed again (there is nothing in the channel)
     loop {

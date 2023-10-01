@@ -8,36 +8,42 @@ use ringbuf::{Consumer, SharedRb};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 use std::sync::{Arc, Mutex};
-use anyhow::Error;
+use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
+use tauri::{AppHandle, Icon, SystemTrayHandle};
 use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_audio_from_wav};
 
 pub const LATENCY_MS: f32 = 30000.0;
+pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
-pub fn init_whisper_context() {
-    let whisper_path_str = "src/ggml-base.en.bin";
-    let whisper_path = Path::new(whisper_path_str);
-    if !whisper_path.exists() && !whisper_path.is_file() {
+pub fn init_whisper_context(app_handle: &AppHandle) {
+    let resource_path = app_handle.path_resolver()
+        .resolve_resource(WHISPER_PATH)
+        .expect("Failed to resolve whisper model resource path");
+
+    if !resource_path.exists() && !resource_path.is_file() {
         panic!("expected a whisper directory")
+        // TODO: Should display error to user
     }
+
     if WHISPER_CONTEXT.get().is_none() {
-        let ctx = WhisperContext::new(whisper_path_str).expect("Failed to open model");
+        let ctx = WhisperContext::new(resource_path.to_str().unwrap()).expect("Failed to open model");
         WHISPER_CONTEXT.set(ctx).expect("Failed to set WhisperContext");
     }
 }
 
 
-pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>) {
+pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, tray_handle: SystemTrayHandle) {
     let (config, mut consumer, input_stream) = setup_audio().expect("Failed to setup audio");
 
     // Ensure the initial speech is finished before starting the input stream
     input_stream.play().expect("Failed to play input stream");
+    set_icon("icons/sigma_master_green_512.png", &tray_handle);
     play_audio_from_wav(PathBuf::from("assets/audio/session_complete.wav"));
-
     // Remove the initial samples
     consumer.clear();
     loop {
@@ -58,6 +64,7 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
             break;
         }
     }
+    set_icon("icons/sigma_master_512.png", &tray_handle);
 }
 
 fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<MaybeUninit<f32>>>>>, Stream), Error> {
@@ -103,6 +110,13 @@ fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<Ma
     Ok((config, consumer, input_stream))
 }
 
+fn set_icon(path_str: &str, tray_handle: &SystemTrayHandle) {
+    let icon_path = PathBuf::from(path_str);
+    if icon_path.exists() && icon_path.is_file() {
+        let icon = Icon::File(icon_path);
+        tray_handle.set_icon(icon).expect("Failed to set icon");
+    }
+}
 
 pub fn speech_to_text(samples: &Vec<f32>, state: &mut WhisperState) -> String {
     let mut params = FullParams::new(SamplingStrategy::default());
