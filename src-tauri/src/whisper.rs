@@ -43,17 +43,13 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, app_handle: AppHandle) {
     let (config, mut consumer, input_stream) = setup_audio().expect("Failed to setup audio");
 
-    // Ensure the initial speech is finished before starting the input stream
-    input_stream.play().expect("Failed to play input stream");
-    set_icon(APP_ICON_RECORDING, &app_handle.tray_handle());
-
     let start_sound_path = app_handle.path_resolver()
         .resolve_resource(SESSION_START_SOUND_PATH)
         .expect("Failed to resolve session start sound resource path");
 
     play_audio_from_wav(start_sound_path);
-    // Remove the initial samples
-    consumer.clear();
+
+    set_icon(APP_ICON_RECORDING, &app_handle.tray_handle());
     loop {
         // check if the hotkey has been pressed twice
         if hotkey_count.lock().unwrap().clone() % 2 == 0 {
@@ -113,8 +109,8 @@ fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<Ma
         "Attempting to build both streams with f32 samples and `{:?}`.",
         config
     );
-    println!("Setup input stream");
     let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None)?;
+    println!("Successfully built stream.");
     Ok((config, consumer, input_stream))
 }
 
