@@ -4,7 +4,6 @@ use std::thread::spawn;
 use async_openai::types::Role;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{play_audio_f32_vec};
 use crate::gpt::{get_gpt_response, messages_setup};
 use crate::screenshot::{ocr_screenshot};
 use crate::text_to_speech::{speak_string};
@@ -30,9 +29,9 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     println!("Initialization complete, starting audio thread");
     // start cpal audio recording to channel
     // when the hotkey_rx receives a message, the audio thread is stopped.
-    let tray_handle = app_handle.tray_handle().clone();
+    let app_handle = app_handle.clone();
     spawn(|| {
-        whisper::send_system_audio_to_channel(audio_tx, hotkey_count, tray_handle);
+        whisper::send_system_audio_to_channel(audio_tx, hotkey_count, app_handle);
     });
 
     let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();
@@ -45,7 +44,6 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     loop {
         if let Ok(audio) = audio_rx.recv() {
             println!("Received audio");
-            play_audio_f32_vec(audio.clone(), 24000);
             let text = whisper::speech_to_text(&audio, &mut state);
             user_speech_to_text_clone.lock().unwrap().push_str(&text);
         } else {

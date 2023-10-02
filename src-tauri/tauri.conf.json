@@ -12,15 +12,12 @@
   },
   "tauri": {
     "systemTray": {
-      "iconPath": "resources/assets/images/sigma_master_512.png",
-      "iconAsTemplate": false
+      "iconPath": "resources/assets/sigma_master_512.png",
+      "iconAsTemplate": true
     },
     "allowlist": {
       "all": false,
       "fs": {
-        "all": true
-      },
-      "dialog": {
         "all": true
       },
       "window": {
@@ -33,7 +30,7 @@
     "macOSPrivateApi": true,
     "bundle": {
       "active": true,
-      "category": "DeveloperTool",
+      "category": "Education",
       "copyright": "",
       "deb": {
         "depends": []
@@ -59,8 +56,10 @@
       "resources": [
         "resources/ggml-base.en.bin",
         "resources/swift_ocr/*",
-        "resources/assets/audio/*",
-        "resources/assets/images/*"
+        "resources/assets/sigma_master_512.png",
+        "resources/assets/sigma_master_green_512.png",
+        "resources/assets/session_start.wav",
+        "resources/assets/session_complete.wav"
       ],
       "shortDescription": "",
       "targets": "all",

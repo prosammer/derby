@@ -3,7 +3,7 @@ extern crate cpal;
 extern crate ringbuf;
 
 use std::mem::MaybeUninit;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, HostTrait};
 use ringbuf::{Consumer, SharedRb};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
@@ -11,16 +11,16 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
-use tauri::{AppHandle, Icon, SystemTrayHandle};
+use std::thread::spawn;
+use tauri::{AppHandle, Icon};
 use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_audio_from_wav};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
-const APP_ICON_DEFAULT: &str = "resources/assets/images/sigma_master_512.png";
-const APP_ICON_RECORDING: &str = "resources/assets/images/sigma_master_512_green.png";
-const SESSION_START_SOUND_PATH: &str = "resources/assets/audio/session_complete.wav";
+const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
+const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_green_512.png";
+const SESSION_START_SOUND_PATH: &str = "resources/assets/session_start.wav";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
@@ -40,25 +40,28 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 }
 
 
-pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, tray_handle: SystemTrayHandle) {
-    let (config, mut consumer, input_stream) = setup_audio().expect("Failed to setup audio");
+pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Arc<Mutex<i32>>, app_handle: AppHandle) {
+    let app_handle_clone = app_handle.clone();
+    let resolved_path = app_handle.path_resolver()
+        .resolve_resource(SESSION_START_SOUND_PATH)
+        .expect("Failed to resolve session start sound resource path");
 
-    // Ensure the initial speech is finished before starting the input stream
-    input_stream.play().expect("Failed to play input stream");
-    set_icon(APP_ICON_RECORDING, &tray_handle);
-    play_audio_from_wav(PathBuf::from(SESSION_START_SOUND_PATH));
-    // Remove the initial samples
+    let thread_handle = spawn(move || {
+        set_icon(APP_ICON_RECORDING, &app_handle, false);
+        play_audio_from_wav(resolved_path);
+    });
+
+    let (config, mut consumer, input_stream) = setup_audio().expect("Failed to setup audio");
+    thread_handle.join().unwrap();
     consumer.clear();
     loop {
         // check if the hotkey has been pressed twice
         if hotkey_count.lock().unwrap().clone() % 2 == 0 {
             println!("Hotkey pressed, stopping audio");
-            input_stream.pause().expect("Failed to pause input stream");
-
             let samples: Vec<f32> = consumer.pop_iter().collect();
             // TODO: Instead of removing every second sample, just set the input data fn to only push every second sample
             let samples = convert_stereo_to_mono_audio(samples).unwrap();
-            let samples = make_audio_louder(&samples, 2.0);
+            let samples = make_audio_louder(&samples, 1.0);
 
             let sampling_freq = config.sample_rate.0 as f32 / 2.0; // TODO: Divide by 2 because of stereo to mono
 
@@ -67,7 +70,9 @@ pub fn send_system_audio_to_channel(audio_tx: Sender<Vec<f32>>, hotkey_count: Ar
             break;
         }
     }
-    set_icon(APP_ICON_DEFAULT, &tray_handle);
+    spawn(move || {
+        set_icon(APP_ICON_DEFAULT, &app_handle_clone, true);
+    });
 }
 
 fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<MaybeUninit<f32>>>>>, Stream), Error> {
@@ -108,16 +113,23 @@ fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<Ma
         "Attempting to build both streams with f32 samples and `{:?}`.",
         config
     );
-    println!("Setup input stream");
     let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None)?;
+    println!("Successfully built stream.");
     Ok((config, consumer, input_stream))
 }
 
-fn set_icon(path_str: &str, tray_handle: &SystemTrayHandle) {
-    let icon_path = PathBuf::from(path_str);
-    if icon_path.exists() && icon_path.is_file() {
-        let icon = Icon::File(icon_path);
-        tray_handle.set_icon(icon).expect("Failed to set icon");
+fn set_icon(path_str: &str, app_handle: &AppHandle, template: bool) {
+
+    let resolved_path = app_handle.path_resolver()
+        .resolve_resource(APP_ICON_RECORDING)
+        .expect("Failed to resolve session start sound resource path");
+
+    if resolved_path.exists() && resolved_path.is_file() {
+        let icon = Icon::File(resolved_path);
+        app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
+        app_handle.tray_handle().set_icon(icon).expect("Failed to set icon");
+    } else {
+        println!("Icon path does not exist: {}", path_str);
     }
 }
 
