@@ -7,7 +7,7 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "Sigma",
+    "productName": "octoguide",
     "version": "0.1.0"
   },
   "tauri": {

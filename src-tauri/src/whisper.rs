@@ -121,13 +121,18 @@ fn setup_audio() -> Result<(StreamConfig, Consumer<f32, Arc<SharedRb<f32, Vec<Ma
 fn set_icon(path_str: &str, app_handle: &AppHandle, template: bool) {
 
     let resolved_path = app_handle.path_resolver()
-        .resolve_resource(APP_ICON_RECORDING)
+        .resolve_resource(path_str)
         .expect("Failed to resolve session start sound resource path");
 
     if resolved_path.exists() && resolved_path.is_file() {
         let icon = Icon::File(resolved_path);
-        app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
+        if !template {
+            app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
+        }
         app_handle.tray_handle().set_icon(icon).expect("Failed to set icon");
+        if template {
+            app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
+        }
     } else {
         println!("Icon path does not exist: {}", path_str);
     }

@@ -1,5 +1,6 @@
 use swift_rs::{SRArray, SRString, swift, SRObject};
 use anyhow::{Result, anyhow};
+use screenshots::Screen;
 
 swift!(fn screenshot_ocr() -> SRObject<RustResponse>);
 
@@ -22,4 +23,11 @@ pub fn ocr_screenshot() -> Result<Vec<String>> {
     }
 
     return Ok(response);
+}
+
+#[tauri::command]
+pub fn request_screen_recording_permissions() -> bool {
+    let screens = Screen::all().unwrap();
+    let first_screen = screens.first().unwrap();
+    return first_screen.capture().is_ok()
 }

@@ -14,9 +14,10 @@ use std::thread::spawn;
 use dotenv::dotenv;
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri_plugin_autostart::MacosLauncher;
+use crate::stores::{get_from_store, set_in_store};
 
 use crate::voice_chat::user_speech_to_gpt_response;
-
+use crate::screenshot::request_screen_recording_permissions;
 
 fn main() {
     dotenv().ok();
@@ -37,6 +38,11 @@ fn main() {
     let mut app = tauri::Builder::default()
         .setup( |app| {
             let app_handle = app.handle();
+
+            if get_from_store(&app_handle, "first_run").is_none() {
+                create_first_run_window(&app_handle);
+            }
+
             let (shortcut_pressed_tx, shortcut_pressed_rx) = channel();
             app_handle.global_shortcut_manager().register("F5", move || {
                 shortcut_pressed_tx.send(true).unwrap();
@@ -68,7 +74,7 @@ fn main() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--flag1", "--flag2"])))
         .plugin(tauri_plugin_store::Builder::default().build())
-        // .invoke_handler(tauri::generate_handler![user_speech_to_gpt_response])
+        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {
@@ -101,14 +107,28 @@ fn main() {
             _ => {}
         });
 }
-fn create_settings_window(handle: &AppHandle) -> tauri::Window {
+fn create_settings_window(app_handle: &AppHandle) -> tauri::Window {
     let new_window = WindowBuilder::new(
-        handle,
+        app_handle,
         "settings_window",
         WindowUrl::App("settings".into())
     )
         .build()
         .expect("Failed to create settings_window");
+
+    new_window
+}
+
+fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
+    let new_window = WindowBuilder::new(
+        app_handle,
+        "first_run_window",
+        WindowUrl::App("first_run".into())
+    )
+        .build()
+        .expect("Failed to create settings_window");
+
+    set_in_store(app_handle, "first_run".to_string(), serde_json::Value::Bool(true));
 
     new_window
 }
