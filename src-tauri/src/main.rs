@@ -1,12 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod whisper;
 mod stores;
 mod audio_utils;
 mod voice_chat;
 mod gpt;
 mod screenshot;
-mod text_to_speech;
 
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -17,9 +15,34 @@ use tauri_plugin_autostart::MacosLauncher;
 use crate::stores::{get_from_store, set_in_store};
 
 use crate::voice_chat::user_speech_to_gpt_response;
-use crate::screenshot::request_screen_recording_permissions;
+
+#[swift_bridge::bridge]
+mod ffi {
+    extern "Rust" {
+        fn rust_double_number(num: i64) -> i64;
+    }
+
+    extern "Swift" {
+        fn swift_multiply_by_4(num: i64) -> i64;
+    }
+}
+
+fn rust_double_number(num: i64) -> i64 {
+    println!("Rust double function called...");
+
+    num * 2
+}
 
 fn main() {
+    let start_num = 100;
+
+    println!("The Rust starting number is {}.", start_num);
+
+    let num = ffi::swift_multiply_by_4(start_num);
+
+    println!("Printing the number from Rust...");
+    println!("The number is now {}.", num);
+
     dotenv().ok();
 
     let record = CustomMenuItem::new("talk".to_string(), "Talk");
@@ -74,7 +97,7 @@ fn main() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--flag1", "--flag2"])))
         .plugin(tauri_plugin_store::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions])
+        // .invoke_handler(tauri::generate_handler![request_screen_recording_permissions])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {
