@@ -4,7 +4,7 @@ use std::thread::spawn;
 use async_openai::types::Role;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{resample_audio, write_to_wav};
+use crate::audio_utils::{read_from_wav, resample_audio, write_to_wav};
 use crate::gpt::{get_gpt_response, messages_setup};
 use crate::screenshot::{ocr_screenshot};
 use crate::text_to_speech::{speak_string};
@@ -26,6 +26,7 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let mut state = ctx.create_state().expect("failed to create key");
 
     println!("Initialization complete, starting audio thread");
+    // audio_res is f32, 48khz, float data from CPAL
     let audio_res: anyhow::Result<Vec<f32>>= whisper::get_audio_recording(hotkey_count, app_handle);
 
     let audio_vec = audio_res.unwrap();
@@ -36,10 +37,11 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
     }
 
+    read_from_wav("/Users/samfinton/Downloads/output.wav");
 
 
-    let speech_text = whisper::speech_to_text(&audio_vec_clone, &mut state);
-    println!("Speech to text: {}", speech_text);
+    // let speech_text = whisper::speech_to_text(&audio_vec_clone, &mut state);
+    // println!("Speech to text: {}", speech_text);
 
 
     // let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();
