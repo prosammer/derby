@@ -30,19 +30,16 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let audio_res: anyhow::Result<Vec<f32>>= whisper::get_audio_recording(hotkey_count, app_handle);
 
     let audio_vec = audio_res.unwrap();
-    let audio_vec_clone = audio_vec.clone();
+    let resampled_audio = resample_audio(&audio_vec, 48000, 16000);
 
-    match write_to_wav(audio_vec, "/Users/samfinton/Downloads/output.wav") {
+    let speech_text = whisper::speech_to_text(&resampled_audio, &mut state);
+    println!("Speech to text: {}", speech_text);
+
+
+    match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
         Ok(()) => println!("Successfully written to WAV file"),
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
     }
-
-    // read_from_wav("/Users/samfinton/Downloads/output.wav");
-
-
-    let speech_text = whisper::speech_to_text(&audio_vec_clone, &mut state);
-    println!("Speech to text: {}", speech_text);
-
 
     // let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();
     // let window_ocr_text = window_ocr_text_list.join(" ");

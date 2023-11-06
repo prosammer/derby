@@ -2,19 +2,14 @@ extern crate anyhow;
 extern crate cpal;
 extern crate ringbuf;
 
-use std::mem::MaybeUninit;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use ringbuf::{Consumer, SharedRb};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 use std::sync::{Arc, Mutex};
 use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
-use std::sync::mpsc::Sender;
-use std::thread::spawn;
 use tauri::{AppHandle, Icon};
-use crate::audio_utils::{convert_stereo_to_mono_audio, make_audio_louder, play_audio_from_wav};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
@@ -112,7 +107,7 @@ fn set_icon(path_str: &str, app_handle: &AppHandle, template: bool) {
     }
 }
 
-pub fn speech_to_text(samples: &Vec<f32>, state: &mut WhisperState) -> String {
+pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
     let mut params = FullParams::new(SamplingStrategy::default());
     params.set_print_progress(false);
     params.set_print_special(false);
@@ -128,39 +123,16 @@ pub fn speech_to_text(samples: &Vec<f32>, state: &mut WhisperState) -> String {
     //params.set_no_speech_thold(0.3);
     //params.set_split_on_word(true);
 
-    let mut reader = hound::WavReader::open("/Users/samfinton/Downloads/output.wav").expect("failed to open file");
-    #[allow(unused_variables)]
-        let hound::WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample,
-        ..
-    } = reader.spec();
+    let audio = if samples.len() % 2 != 0 {
+        whisper_rs::convert_stereo_to_mono_audio(samples).unwrap()
+    } else {
+        samples.to_vec()
+    };
 
-    println!("Reader Spec: {:?}", reader.spec());
-    // Convert the audio to floating point samples.
-    let mut audio = whisper_rs::convert_integer_to_float_audio(
-        &reader
-            .samples::<i16>()
-            .map(|s| s.expect("invalid sample"))
-            .collect::<Vec<_>>(),
-    );
-
-    // Convert audio to 16KHz mono f32 samples, as required by the model.
-    // These utilities are provided for convenience, but can be replaced with custom conversion logic.
-    // SIMD variants of these functions are also available on nightly Rust (see the docs).
-    if channels == 2 {
-        audio = whisper_rs::convert_stereo_to_mono_audio(&audio).unwrap();
-    } else if channels != 1 {
-        panic!(">2 channels unsupported");
-    }
-
-    if sample_rate != 16000 {
-        panic!("sample rate must be 16KHz");
-    }
+    // if audio
 
     state
-        .full(params, &audio[..])
+        .full(params, &audio)
         .expect("failed to convert samples");
 
     let num_tokens = state.full_n_tokens(0).expect("Error");
