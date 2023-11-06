@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fs::File;
 use rodio::{Decoder, OutputStream, Sink};
 use bytes::Bytes;

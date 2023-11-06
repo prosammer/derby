@@ -1,8 +1,9 @@
 use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
+use screenshots::image::RgbaImage;
 
-pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>) -> Result<ChatCompletionRequestMessage, Error> {
+pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, screenshot: RgbaImage) -> Result<ChatCompletionRequestMessage, Error> {
 
     let client = Client::new();
 
@@ -13,11 +14,8 @@ pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>) -> Resu
         .build()?;
 
     let resp = tokio::runtime::Runtime::new().unwrap().block_on(client.chat().create(request))?;
-
     let resp_message = resp.choices.get(0).unwrap().message.clone();
-
     let bot_string = resp_message.content.as_ref().unwrap().clone();
-
     let new_bot_message = create_chat_completion_request_msg(
         bot_string,
         Role::Assistant);

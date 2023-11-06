@@ -1,13 +1,11 @@
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
 use std::thread::spawn;
 use async_openai::types::Role;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{read_from_wav, resample_audio, write_to_wav};
+use crate::audio_utils::{ resample_audio, write_to_wav};
 use crate::gpt::{get_gpt_response, messages_setup};
-use crate::screenshot::{ocr_screenshot};
-use crate::text_to_speech::{speak_string};
+use crate::screenshot::{screenshot_and_upload};
 use crate::whisper::WHISPER_CONTEXT;
 
 pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
@@ -17,9 +15,9 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let user_speech_to_text_clone = user_speech_to_text.clone();
 
     // ocr the screenshot
-    // let ocr_thread = spawn(|| {
-    //     ocr_screenshot()
-    // });
+    let screenshot_handle = spawn(|| {
+       screenshot_and_upload();
+    });
 
     whisper::init_whisper_context(&app_handle);
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");
@@ -35,29 +33,21 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let speech_text = whisper::speech_to_text(&resampled_audio, &mut state);
     println!("Speech to text: {}", speech_text);
 
+    let screenshot_url = screenshot_handle.join().unwrap();
+
+
+    // TODO: Send the image and the user speech to chatgpt
+    let mut messages = messages_setup();
+    let user_message = gpt::create_chat_completion_request_msg(speech_text, Role::User);
+    messages.push(user_message);
+    // let response = get_gpt_response(messages, screenshot_url);
+
+
 
     match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
         Ok(()) => println!("Successfully written to WAV file"),
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
     }
-
-    // let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();
-    // let window_ocr_text = window_ocr_text_list.join(" ");
-    // println!("{}", window_ocr_text);
-    // messages.push(gpt::create_chat_completion_request_msg(window_ocr_text, Role::User));
-    //
-    //
-    // // This will keep looping until the hotkey is pressed again (there is nothing in the channel)
-    // loop {
-    //     if let Ok(audio) = audio_rx.recv() {
-    //         println!("Received audio");
-    //         let text = whisper::speech_to_text(&audio, &mut state);
-    //         user_speech_to_text_clone.lock().unwrap().push_str(&text);
-    //     } else {
-    //         break;
-    //     }
-    // }
-    //
     // println!("User Speech: {}", user_speech_to_text_clone.lock().unwrap());
     // messages.push(gpt::create_chat_completion_request_msg(user_speech_to_text_clone.lock().unwrap().clone(), Role::User));
     //
