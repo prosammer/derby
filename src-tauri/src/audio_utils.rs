@@ -157,6 +157,23 @@ pub fn play_audio_from_wav(path: PathBuf) {
     play_audio_bytes(Bytes::from(buffer));
 }
 
+pub fn write_to_wav(audio_vec: Vec<f32>, filename: &str) -> Result<(), hound::Error> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48000,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let mut writer = hound::WavWriter::create(filename, spec)?;
+
+    for sample in audio_vec {
+        writer.write_sample(sample)?;
+    }
+
+    writer.finalize()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::File;
