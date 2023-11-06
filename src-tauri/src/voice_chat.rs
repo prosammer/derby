@@ -5,18 +5,15 @@ use tauri::{AppHandle};
 use crate::{gpt, whisper};
 use crate::audio_utils::{ resample_audio, write_to_wav};
 use crate::gpt::{get_gpt_response, messages_setup};
-use crate::screenshot::{screenshot_and_upload};
+use crate::screenshot::{screenshot};
 use crate::whisper::WHISPER_CONTEXT;
 
 pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
     // record audio in this thread until the hotkey is pressed again
-
-    let user_speech_to_text = Arc::new(Mutex::new(String::new()));
-    let user_speech_to_text_clone = user_speech_to_text.clone();
-
     // ocr the screenshot
     let screenshot_handle = spawn(|| {
-       screenshot_and_upload();
+       let image_path = screenshot();
+        return image_path;
     });
 
     whisper::init_whisper_context(&app_handle);
@@ -33,14 +30,14 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let speech_text = whisper::speech_to_text(&resampled_audio, &mut state);
     println!("Speech to text: {}", speech_text);
 
-    let screenshot_url = screenshot_handle.join().unwrap();
+    let screenshot_path = screenshot_handle.join().unwrap();
 
 
     // TODO: Send the image and the user speech to chatgpt
     let mut messages = messages_setup();
     let user_message = gpt::create_chat_completion_request_msg(speech_text, Role::User);
     messages.push(user_message);
-    // let response = get_gpt_response(messages, screenshot_url);
+    let response = get_gpt_response(messages, screenshot_path);
 
 
 
@@ -48,14 +45,5 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
         Ok(()) => println!("Successfully written to WAV file"),
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
     }
-    // println!("User Speech: {}", user_speech_to_text_clone.lock().unwrap());
-    // messages.push(gpt::create_chat_completion_request_msg(user_speech_to_text_clone.lock().unwrap().clone(), Role::User));
-    //
-    //
-    // // finally, the entire_text is sent to GPT and the response is copy/pasted
-    // let gpt_response = get_gpt_response(messages).expect("Failed to get GPT response");
-    // println!("GPT Response: {}", gpt_response.content.as_ref().unwrap());
-    // speak_string(gpt_response.content.as_ref().unwrap().clone());
-    // pbcopy the gpt_response
 }
 

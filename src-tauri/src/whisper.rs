@@ -129,8 +129,6 @@ pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
         samples.to_vec()
     };
 
-    // if audio
-
     state
         .full(params, &audio)
         .expect("failed to convert samples");

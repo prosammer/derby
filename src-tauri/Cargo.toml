@@ -32,7 +32,7 @@ anyhow = "1.0.75"
 ringbuf = "0.3.3"
 async-stream = "0.3.5"
 futures = "0.3.28"
-reqwest = "0.11.20"
+reqwest = { version = "0.11.20", features = ["blocking", "json"] }
 rodio = "0.17.1"
 bytes = "1.5.0"
 rubato = "0.14.1"
@@ -43,10 +43,11 @@ repng = "0.2.2"
 tts = "0.25.6"
 objc = "0.2.7"
 cocoa-foundation = "0.1.2"
-screenshots = "0.8.4"
+screenshots = "0.8.5"
 crossbeam = "0.8.2"
 hound = "3.5.1"
 cloudinary = "0.2.2"
+base64 = "0.21.5"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

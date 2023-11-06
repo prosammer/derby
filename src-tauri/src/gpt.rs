@@ -1,26 +1,89 @@
+use std::fs::File;
+use std::io::Read;
 use anyhow::{Error, Result};
-use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
-use screenshots::image::RgbaImage;
+use base64::encode;
+use screenshots::image;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 
-pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, screenshot: RgbaImage) -> Result<ChatCompletionRequestMessage, Error> {
 
-    let client = Client::new();
+#[derive(Serialize, Deserialize)]
+struct ApiResponse {
+    choices: Vec<Choice>,
+}
 
-    let request = CreateChatCompletionRequestArgs::default()
-        .model("gpt-3.5-turbo")
-        .max_tokens(120_u16)
-        .messages(messages.clone())
-        .build()?;
+#[derive(Serialize, Deserialize)]
+struct Choice {
+    message: MessageContent,
+}
 
-    let resp = tokio::runtime::Runtime::new().unwrap().block_on(client.chat().create(request))?;
-    let resp_message = resp.choices.get(0).unwrap().message.clone();
-    let bot_string = resp_message.content.as_ref().unwrap().clone();
-    let new_bot_message = create_chat_completion_request_msg(
-        bot_string,
-        Role::Assistant);
+#[derive(Serialize, Deserialize)]
+struct MessageContent {
+    content: String,
+}
 
-    return Ok(new_bot_message);
+pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<ChatCompletionRequestMessage, Error> {
+    let mut file = File::open(image_path)?;
+    // Read the contents of the file into a vector
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    // Encode the buffer as a Base64 string
+    let base64_string = encode(&buffer);
+
+    let payload = json!({
+        "model": "gpt-4-vision-preview",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "What’s in this image?"
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": format!("data:image/jpeg;base64,{}", base64_string)
+                }
+              }
+            ]
+          }
+        ],
+        "max_tokens": 300
+    });
+
+    let client = reqwest::blocking::Client::new();
+    let api_url = "https://api.openai.com/v1/chat/completions";
+
+    // Make the POST request
+    let response = client.post(api_url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", env!("OPENAI_API_KEY")))
+        .json(&payload)
+        .send();
+
+
+    let first_choice_content: Option<String> = match response {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                match resp.json::<ApiResponse>() {
+                    Ok(parsed) => parsed.choices.get(0).map(|choice| choice.message.content.clone()),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
+        },
+        Err(_) => None,
+    };
+
+    let content = first_choice_content.unwrap_or("".to_string());
+    println!("GPT Response: {}", content);
+
+    return Ok(create_chat_completion_request_msg(content, Role::Assistant));
+
 }
 
 
