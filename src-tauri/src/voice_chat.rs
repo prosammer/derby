@@ -37,11 +37,11 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
     }
 
-    read_from_wav("/Users/samfinton/Downloads/output.wav");
+    // read_from_wav("/Users/samfinton/Downloads/output.wav");
 
 
-    // let speech_text = whisper::speech_to_text(&audio_vec_clone, &mut state);
-    // println!("Speech to text: {}", speech_text);
+    let speech_text = whisper::speech_to_text(&audio_vec_clone, &mut state);
+    println!("Speech to text: {}", speech_text);
 
 
     // let window_ocr_text_list = ocr_thread.join().unwrap().unwrap();

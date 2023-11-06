@@ -61,7 +61,7 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     let input_device = host
         .default_input_device()
         .expect("failed to get default input device");
-    println!("Using default input device: \"{}\"", input_device.name()?);
+    println!("Using default input device: \"{}\"", input_device.name().unwrap());
     let config = input_device
         .default_input_config()
         .expect("Failed to get default input config").config();
@@ -87,7 +87,7 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
         "Attempting to build both streams with f32 samples and `{:?}`.",
         config
     );
-    let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None)?;
+    let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None).unwrap();
     println!("Successfully built stream.");
     Ok((buffer_clone, input_stream, config))
 }
@@ -128,8 +128,39 @@ pub fn speech_to_text(samples: &Vec<f32>, state: &mut WhisperState) -> String {
     //params.set_no_speech_thold(0.3);
     //params.set_split_on_word(true);
 
+    let mut reader = hound::WavReader::open("/Users/samfinton/Downloads/output.wav").expect("failed to open file");
+    #[allow(unused_variables)]
+        let hound::WavSpec {
+        channels,
+        sample_rate,
+        bits_per_sample,
+        ..
+    } = reader.spec();
+
+    println!("Reader Spec: {:?}", reader.spec());
+    // Convert the audio to floating point samples.
+    let mut audio = whisper_rs::convert_integer_to_float_audio(
+        &reader
+            .samples::<i16>()
+            .map(|s| s.expect("invalid sample"))
+            .collect::<Vec<_>>(),
+    );
+
+    // Convert audio to 16KHz mono f32 samples, as required by the model.
+    // These utilities are provided for convenience, but can be replaced with custom conversion logic.
+    // SIMD variants of these functions are also available on nightly Rust (see the docs).
+    if channels == 2 {
+        audio = whisper_rs::convert_stereo_to_mono_audio(&audio).unwrap();
+    } else if channels != 1 {
+        panic!(">2 channels unsupported");
+    }
+
+    if sample_rate != 16000 {
+        panic!("sample rate must be 16KHz");
+    }
+
     state
-        .full(params, &*samples)
+        .full(params, &audio[..])
         .expect("failed to convert samples");
 
     let num_tokens = state.full_n_tokens(0).expect("Error");
