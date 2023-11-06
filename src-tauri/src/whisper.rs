@@ -123,10 +123,10 @@ pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
     //params.set_no_speech_thold(0.3);
     //params.set_split_on_word(true);
 
-    let audio = if samples.len() % 2 != 0 {
-        whisper_rs::convert_stereo_to_mono_audio(samples).unwrap()
-    } else {
+    let audio = if samples.len() % 2 == 0 {
         samples.to_vec()
+    } else {
+        samples[..samples.len() - 1].to_vec()
     };
 
     state

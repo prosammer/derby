@@ -3,7 +3,6 @@ use std::io::Read;
 use anyhow::{Error, Result};
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 use base64::encode;
-use screenshots::image;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 

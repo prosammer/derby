@@ -64,6 +64,12 @@ fn main() {
                             spawn(move || {
                                 user_speech_to_gpt_response(handle_clone, hotkey_count_clone);
                             });
+                        } else {
+                            // open the transcript window
+                            let window_exists = app_handle.get_window("transcript_window").is_some();
+                            if !window_exists {
+                                let _window = create_transcription_window(&app_handle);
+                            }
                         }
                     }
                 }
@@ -106,6 +112,22 @@ fn main() {
             }
             _ => {}
         });
+}
+
+fn create_transcription_window(app_handle: &AppHandle) -> tauri::Window {
+    let new_window = WindowBuilder::new(
+        app_handle,
+        "transcription_window",
+        WindowUrl::App("transcription".into())
+    )
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .inner_size(192.0,192.0)
+        .build()
+        .expect("Failed to create transcription_window");
+
+    new_window
 }
 fn create_settings_window(app_handle: &AppHandle) -> tauri::Window {
     let new_window = WindowBuilder::new(

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use async_openai::types::Role;
-use tauri::{AppHandle};
+use tauri::{AppHandle, Manager};
 use crate::{gpt, whisper};
 use crate::audio_utils::{ resample_audio, write_to_wav};
 use crate::gpt::{get_gpt_response, messages_setup};
@@ -15,6 +15,9 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
        let image_path = screenshot();
         return image_path;
     });
+
+    let app_handle_clone = app_handle.clone();
+
 
     whisper::init_whisper_context(&app_handle);
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");
@@ -33,11 +36,16 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let screenshot_path = screenshot_handle.join().unwrap();
 
 
-    // TODO: Send the image and the user speech to chatgpt
     let mut messages = messages_setup();
     let user_message = gpt::create_chat_completion_request_msg(speech_text, Role::User);
     messages.push(user_message);
     let response = get_gpt_response(messages, screenshot_path);
+    let gpt_content = response.unwrap().content.unwrap();
+
+    // we need to use tauri to send the gpt response to the frontend
+    if let Err(e) = app_handle_clone.emit_all("gpt-response", Some(gpt_content)) {
+        eprintln!("Error emitting event: {:?}", e);
+    }
 
 
 
