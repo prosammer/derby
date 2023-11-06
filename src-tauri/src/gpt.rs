@@ -50,7 +50,7 @@ pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_p
             ]
           }
         ],
-        "max_tokens": 300
+        "max_tokens": 200,
     });
 
     let client = reqwest::blocking::Client::new();
@@ -61,24 +61,11 @@ pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_p
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", env!("OPENAI_API_KEY")))
         .json(&payload)
-        .send();
+        .send().unwrap();
 
+    let parsed_response = response.json::<ApiResponse>().expect("Failed to parse JSON");
 
-    let first_choice_content: Option<String> = match response {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                match resp.json::<ApiResponse>() {
-                    Ok(parsed) => parsed.choices.get(0).map(|choice| choice.message.content.clone()),
-                    Err(_) => None,
-                }
-            } else {
-                None
-            }
-        },
-        Err(_) => None,
-    };
-
-    let content = first_choice_content.unwrap_or("".to_string());
+    let content = parsed_response.choices.get(0).expect("No choices in response").message.content.clone();
     println!("GPT Response: {}", content);
 
     return Ok(create_chat_completion_request_msg(content, Role::Assistant));
