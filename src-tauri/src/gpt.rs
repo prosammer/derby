@@ -1,4 +1,5 @@
 use std::env;
+use std::time::Duration;
 use anyhow::{Error, Result};
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 use base64::encode;
@@ -6,7 +7,7 @@ use reqwest::{Client, header};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use futures_util::StreamExt;
-use tokio::fs;
+use tokio::{fs, time};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 
@@ -28,7 +29,7 @@ impl GptClient {
 
     pub async fn get_gpt_response(&self, mut messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<()> {
         if self.is_testing_env() {
-            self.use_mocked_response().await?;
+            self.emit_test_events().await?;
             return Ok(());
         }
 
@@ -111,9 +112,10 @@ impl GptClient {
         Ok(())
     }
 
-    async fn use_mocked_response(&self) -> Result<()> {
+    async fn emit_test_events(&self) -> Result<()> {
         let responses = self.read_mocked_responses("openai_response.txt").await?;
         for response in responses {
+            time::sleep(Duration::from_millis(100)).await;
             self.app_handle.emit_all("gpt_chunk_received", response)?;
         }
         Ok(())
@@ -122,7 +124,7 @@ impl GptClient {
     async fn read_mocked_responses(&self, file_path: &str) -> Result<Vec<String>> {
         let buffer = fs::read(file_path).await?;
         Ok(buffer
-            .split_inclusive(|&x| x == b'\n')
+            .split_inclusive(|&x| x == b' ')
             .filter_map(|bytes| String::from_utf8(bytes.to_vec()).ok())
             .collect())
     }
