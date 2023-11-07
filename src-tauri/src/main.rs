@@ -11,7 +11,7 @@ mod text_to_speech;
 use std::sync::{ Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
-use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
+use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Icon, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri::TitleBarStyle::{Transparent};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -19,6 +19,9 @@ use crate::stores::{get_from_store, set_in_store};
 
 use crate::voice_chat::user_speech_to_gpt_response;
 use crate::screenshot::request_screen_recording_permissions;
+
+const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
+const APP_ICON_LISTENING: &str = "resources/assets/sigma_master_green_512.png";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TranscriptionMode {
@@ -49,15 +52,24 @@ impl TranscriptionState {
         }
     }
 
-    fn on_inactive(&self, _app_handle: AppHandle) {
+    fn on_inactive(&self, app_handle: AppHandle) {
         println!("Transcription mode: Inactive");
-        // set_icon("assets/icons/icon.png", app_handle, false);
+        let resource_path = app_handle.path_resolver()
+            .resolve_resource(APP_ICON_DEFAULT)
+            .expect("Failed to resolve icon resource path");
+
+        app_handle.tray_handle().set_icon_as_template(true).unwrap();
+        app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
     }
 
     fn on_listening(&self, app_handle: AppHandle) {
         println!("Transcription mode: Listening");
-        app_handle.tray_handle().get_item("toggle_button").set_title("Send").expect("Could not set tray item title");
-        // set_icon("assets/icons/icon-listening.png", app_handle, false);
+        let resource_path = app_handle.path_resolver()
+            .resolve_resource(APP_ICON_LISTENING)
+            .expect("Failed to resolve icon resource path");
+
+        app_handle.tray_handle().set_icon_as_template(false).unwrap();
+        app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
 
         let app_handle_clone = app_handle.clone();
         spawn(move || {
@@ -67,8 +79,13 @@ impl TranscriptionState {
 
     fn on_processing(&self, app_handle: AppHandle) {
         println!("Transcription mode: Processing");
-        app_handle.tray_handle().get_item("toggle_button").set_title("Talk").expect("Could not set tray item title");
-        // set_icon("assets/icons/icon-processing.png", app_handle, false);
+
+        let resource_path = app_handle.path_resolver()
+            .resolve_resource(APP_ICON_DEFAULT)
+            .expect("Failed to resolve icon resource path");
+
+        app_handle.tray_handle().set_icon_as_template(true).unwrap();
+        app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
 
         // TODO: I think there's a race condition here
         let _window = create_transcription_window(&app_handle);
@@ -107,11 +124,11 @@ fn main() {
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {
+                tauri::SystemTrayEvent::LeftClick { .. } => {
+                    change_transcription_state(&app_handle);
+                }
                 tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
                     match id.as_str() {
-                        "toggle_button" => {
-                            change_transcription_state(&app_handle);
-                        }
                         "settings" => {
                             let window_exists = app_handle.get_window("settings_window").is_some();
                             if !window_exists {
@@ -206,15 +223,13 @@ fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
 }
 
 fn tray_setup() -> SystemTray {
-    let record = CustomMenuItem::new("toggle_button".to_string(), "Talk");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
-    let quit = CustomMenuItem::new("quit".to_string(), "Quit");
+    let quit = CustomMenuItem::new("quit".to_string(), "Quit").accelerator("Cmd+Q");
     let tray_menu = SystemTrayMenu::new()
-        .add_item(record)
         .add_item(settings)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
 
-    let tray = SystemTray::new().with_menu(tray_menu);
+    let tray = SystemTray::new().with_menu(tray_menu).with_menu_on_left_click(false);
     tray
 }

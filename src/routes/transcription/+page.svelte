@@ -7,10 +7,12 @@
   let gptContent = '';
   let hasCopied = false;
   let isNewMessage = false;
+  let typingAnimation = false;
 
   onMount(() => {
     let unlistenChunks: () => void;
     let unlistenStart: () => void;
+    typingAnimation = true;
 
     (async () => {
         unlistenStart = await listen('gpt_stream_start', () => {
@@ -23,8 +25,8 @@
           isNewMessage = false;
         }
         if (typeof event.payload === 'string') {
-          // Append the new text chunks to the existing gptContent
           gptContent += event.payload;
+          typingAnimation = false;
         } else {
           console.error('Received non-string payload', event.payload);
         }
@@ -53,7 +55,6 @@
       }, 1000);
     } catch (error) {
       console.error('Failed to copy content to clipboard', error);
-      // Optionally show an error notification to the user
     }
   }
 </script>
@@ -68,6 +69,13 @@
     </svg>
   </div>
   <div class="col-span-full text-center text-sm text-[#FDF7E3] h-64 overflow-auto">
+    {#if typingAnimation}
+      <div class="typing-animation text-[#FDF7E3]">
+        <div class="dot">.</div>
+        <div class="dot">.</div>
+        <div class="dot">.</div>
+      </div>
+    {/if}
     {gptContent}
   </div>
 </div>
@@ -87,4 +95,33 @@
     .rotate-scale-up {
         animation: rotate-scale-up 0.3s ease-in-out forwards;
     }
+
+    .typing-animation {
+        display: flex;
+        align-items: center;
+    }
+
+    .dot {
+        border-radius: 50%;
+        height: 3px;
+        margin: 0 2px;
+        animation: dot-wave 1.5s infinite;
+    }
+
+    .dot:nth-child(1) { animation-delay: 0s; }
+    .dot:nth-child(2) { animation-delay: 0.15s; }
+    .dot:nth-child(3) { animation-delay: 0.3s; }
+
+    /* Keyframes for the wave animation */
+    @keyframes dot-wave {
+        0%, 60%, 100% {
+            transform: translateY(0);
+            transform: scale(1);
+        }
+        30% {
+            transform: translateY(-15px);
+            transform: scale(1.2);
+        }
+    }
+
 </style>
