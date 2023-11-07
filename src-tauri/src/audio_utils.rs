@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fs::File;
 use rodio::{Decoder, OutputStream, Sink};
 use bytes::Bytes;
@@ -122,26 +121,29 @@ pub fn play_audio_f32_vec(data: Vec<f32>, sample_rate: u32) {
     sink.sleep_until_end();
 }
 
-pub fn resample_audio(input: Vec<f32>, from_rate: usize, to_rate: usize) -> Result<Vec<f32>, Box<dyn Error>> {
+pub fn resample_audio(audio_vec: &[f32], original_sample_rate: usize, target_sample_rate: usize) -> Vec<f32> {
+    let sinc_len = 256;
+    let f_cutoff = 0.95;
     let params = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: 0.95,
-        oversampling_factor: 128,
-        interpolation: SincInterpolationType::Linear,
+        sinc_len,
+        f_cutoff,
+        oversampling_factor: 160,
+        interpolation: SincInterpolationType::Cubic,
         window: WindowFunction::BlackmanHarris2,
     };
 
     let mut resampler = SincFixedIn::<f32>::new(
-        to_rate as f64 / from_rate as f64,
-        10.0,
+        target_sample_rate as f64 / original_sample_rate as f64,
+        1.0,
         params,
-        1024,
+        audio_vec.len(),
         1,
-    ).unwrap();
+    ).expect("Failed to create resampler");
 
-    let output = resampler.process(&[input], None).unwrap();
+    let audio_data = vec![audio_vec.to_vec()];
 
-    Ok(output[0].clone()) // Return the first (and only) inner vector
+    let audio_vec_resampled = resampler.process(&audio_data, None).unwrap();
+    audio_vec_resampled.into_iter().flatten().collect()
 }
 
 pub fn play_audio_from_wav(path: PathBuf) {
@@ -155,6 +157,59 @@ pub fn play_audio_from_wav(path: PathBuf) {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
     play_audio_bytes(Bytes::from(buffer));
+}
+
+pub fn write_to_wav(audio_samples: &[f32], filename: &str) -> Result<(), hound::Error> {
+    let target_sample_rate = 16000;
+
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: target_sample_rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut writer = hound::WavWriter::create(filename, spec)?;
+
+    for &sample in audio_samples {
+        writer.write_sample((sample * i16::MAX as f32) as i16)?;
+    }
+
+    writer.finalize()?;
+    Ok(())
+}
+
+pub fn read_from_wav(filename: &str) {
+    let mut reader = hound::WavReader::open(filename).expect("failed to open file");
+    #[allow(unused_variables)]
+        let hound::WavSpec {
+        channels,
+        sample_rate,
+        bits_per_sample,
+        ..
+    } = reader.spec();
+
+    println!("Reader Spec: {:?}", reader.spec());
+    // Convert the audio to floating point samples.
+    let mut audio = whisper_rs::convert_integer_to_float_audio(
+        &reader
+            .samples::<i16>()
+            .map(|s| s.expect("invalid sample"))
+            .collect::<Vec<_>>(),
+    );
+
+    // Convert audio to 16KHz mono f32 samples, as required by the model.
+    // These utilities are provided for convenience, but can be replaced with custom conversion logic.
+    // SIMD variants of these functions are also available on nightly Rust (see the docs).
+    if channels == 2 {
+        audio = whisper_rs::convert_stereo_to_mono_audio(&audio).unwrap();
+    } else if channels != 1 {
+        panic!(">2 channels unsupported");
+    }
+
+    if sample_rate != 16000 {
+        panic!("sample rate must be 16KHz");
+    }
 }
 
 #[cfg(test)]

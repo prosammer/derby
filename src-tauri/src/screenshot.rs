@@ -1,28 +1,22 @@
-use swift_rs::{SRArray, SRString, swift, SRObject};
-use anyhow::{Result, anyhow};
+use std::fs;
 use screenshots::Screen;
 
-swift!(fn screenshot_ocr() -> SRObject<RustResponse>);
+pub fn screenshot() -> String {
+    let screenshot_path = "/Users/samfinton/Downloads/screenshot.png";
+    let screens = Screen::all().unwrap();
+    let screen = screens[0];
+    println!("capturer {screen:?}");
+    let image = screen.capture().unwrap();
+    image
+        .save(screenshot_path)
+        .unwrap();
 
-#[repr(C)]
-struct RustResponse {
-    success: bool,
-    content: SRArray<SRString>
-}
+    let metadata = fs::metadata(screenshot_path).unwrap();
+    // Get the file size from the metadata
+    let file_size = metadata.len();
+    println!("File size is: {} bytes", file_size);
 
-pub fn ocr_screenshot() -> Result<Vec<String>> {
-    let rust_response = unsafe { screenshot_ocr() };
-
-    let mut response = Vec::new();
-    if rust_response.success {
-        for sr_string in rust_response.content.as_slice() {
-            response.push(sr_string.as_str().to_string());
-        }
-    } else {
-        return Err(anyhow!("Swift returned false"));
-    }
-
-    return Ok(response);
+    return screenshot_path.to_string();
 }
 
 #[tauri::command]

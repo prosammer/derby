@@ -21,7 +21,7 @@
         "all": true
       },
       "window": {
-        "create": true
+        "all": true
       },
       "globalShortcut": {
         "all": true
@@ -55,7 +55,6 @@
       },
       "resources": [
         "resources/ggml-base.en.bin",
-        "resources/swift_ocr/*",
         "resources/assets/sigma_master_512.png",
         "resources/assets/sigma_master_green_512.png",
         "resources/assets/session_start.wav",

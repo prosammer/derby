@@ -1,28 +1,85 @@
+use std::fs::File;
+use std::io::Read;
 use anyhow::{Error, Result};
-use async_openai::Client;
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
+use base64::encode;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tauri::{AppHandle, Manager};
+use futures_util::StreamExt;
 
-pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>) -> Result<ChatCompletionRequestMessage, Error> {
+
+#[derive(Serialize, Deserialize)]
+struct ApiResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Choice {
+    message: MessageContent,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MessageContent {
+    content: String,
+}
+
+pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<(), Error> {
+    println!("Getting GPT response");
+    let mut file = File::open(image_path)?;
+    // Read the contents of the file into a vector
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    // Encode the buffer as a Base64 string
+    let base64_string = encode(&buffer);
+
+    let payload = json!({
+        "model": "gpt-4-vision-preview",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "What’s in this image?"
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": format!("data:image/jpeg;base64,{}", base64_string)
+                }
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "max_tokens": 150,
+    });
 
     let client = Client::new();
+    let api_url = "https://api.openai.com/v1/chat/completions";
 
-    let request = CreateChatCompletionRequestArgs::default()
-        .model("gpt-3.5-turbo")
-        .max_tokens(120_u16)
-        .messages(messages.clone())
-        .build()?;
+    // Make the POST request
+    let response = client.post(api_url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", env!("OPENAI_API_KEY")))
+        .json(&payload)
+        .send().await?;
 
-    let resp = tokio::runtime::Runtime::new().unwrap().block_on(client.chat().create(request))?;
+    let mut stream = response.bytes_stream();
 
-    let resp_message = resp.choices.get(0).unwrap().message.clone();
+    while let Some(item) = stream.next().await {
+        let chunk = item?; // Get the chunk as bytes
+        let chunk_str = String::from_utf8(chunk.to_vec())?;
+        println!("{}", chunk_str);
 
-    let bot_string = resp_message.content.as_ref().unwrap().clone();
-
-    let new_bot_message = create_chat_completion_request_msg(
-        bot_string,
-        Role::Assistant);
-
-    return Ok(new_bot_message);
+        // Emit a Tauri event with the chunk content
+        app_handle.emit_all("gpt_chunk_received", chunk_str).expect("Failed to emit event");
+    }
+    println!("Finished getting GPT response");
+    Ok(())
 }
 
 
