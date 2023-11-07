@@ -27,25 +27,8 @@
   });
 </script>
 
-<div class="grid grid-cols-12 bg-gray-300 p-2 rounded-lg">
-  <!-- Small left column for the left button -->
-  <div class="col-span-2 flex justify-center">
-    <button class="flex items-center justify-center h-10 w-10 bg-gray-400 rounded-full text-white">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    </button>
-  </div>
-
-  <!-- Large central column that takes up most of the width -->
-  <div class="col-span-8 flex justify-center">
+<div data-tauri-drag-region class="grid grid-cols-12 bg-[#07323A]/50 p-2 rounded-lg">
+  <div class="px-4 flex justify-center text-sm text-white">
     {gptContent}
-  </div>
-
-  <!-- Small right column for the right button -->
-  <div class="col-span-2 flex justify-center">
-    <button id="stop-recording" class="flex items-center justify-center h-10 w-10 bg-red-500 rounded-full">
-      <!-- Icon or content for the button -->
-    </button>
   </div>
 </div>
