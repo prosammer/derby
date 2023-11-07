@@ -8,7 +8,7 @@ use crate::gpt::{GptClient, messages_setup};
 use crate::screenshot::{screenshot};
 use crate::whisper::WHISPER_CONTEXT;
 
-pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
+pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<u32>>) {
     // record audio in this thread until the hotkey is pressed again
     // ocr the screenshot
     let screenshot_handle = spawn(|| {

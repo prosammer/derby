@@ -8,10 +8,10 @@ mod gpt;
 mod screenshot;
 mod text_to_speech;
 
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::spawn;
+use crossbeam::channel::bounded;
 use dotenv::dotenv;
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri::TitleBarStyle::{Transparent};
@@ -49,7 +49,7 @@ fn main() {
                 create_first_run_window(&app_handle);
             }
 
-            let (shortcut_pressed_tx, shortcut_pressed_rx) = channel();
+            let (shortcut_pressed_tx, shortcut_pressed_rx) = bounded(1);
             app_handle.global_shortcut_manager().register("F5", move || {
                 shortcut_pressed_tx.send(true).unwrap();
                 println!("Shortcut pressed")
@@ -58,25 +58,8 @@ fn main() {
             println!("Waiting for shortcut...");
 
             spawn(move || {
-                loop {
-                    if shortcut_pressed_rx.recv().is_ok() {
-                        let mut locked_count = hotkey_count.lock().unwrap();
-                        *locked_count += 1;
-                        println!("Hotkey count: {}", locked_count);
-
-                        let hotkey_count_clone = hotkey_count.clone();
-                        let handle_clone = app_handle.clone();
-                        if *locked_count % 2 == 0 {
-                            if !transcription_window_open_clone_for_hotkey.load(Ordering::SeqCst) {
-                                transcription_window_open_clone_for_hotkey.store(true, Ordering::SeqCst);
-                                let _window = create_transcription_window(&app_handle);
-                            }
-                        } else {
-                            spawn(move || {
-                                user_speech_to_gpt_response(handle_clone, hotkey_count_clone);
-                            });
-                        }
-                    }
+                while let Ok(_) = shortcut_pressed_rx.recv() {
+                    toggle_transcription(&app_handle, &hotkey_count, &transcription_window_open);
                 }
             });
 
@@ -126,6 +109,26 @@ fn main() {
         _ => {}
     });
 }
+
+fn toggle_transcription(app_handle: &AppHandle, hotkey_count: &Arc<Mutex<u32>>, transcription_window_open: &Arc<AtomicBool>) {
+    let mut locked_count = hotkey_count.lock().unwrap();
+    *locked_count += 1;
+    println!("Hotkey count: {}", locked_count);
+
+    if *locked_count % 2 == 0 {
+        if !transcription_window_open.load(Ordering::SeqCst) {
+            transcription_window_open.store(true, Ordering::SeqCst);
+            let _window = create_transcription_window(&app_handle);
+        }
+    } else {
+        let handle_clone = app_handle.clone();
+        let hotkey_count_clone = hotkey_count.clone();
+        spawn(move || {
+            user_speech_to_gpt_response(handle_clone, hotkey_count_clone);
+        });
+    }
+}
+
 
 fn create_transcription_window(app_handle: &AppHandle) -> tauri::Window {
     let new_window = WindowBuilder::new(

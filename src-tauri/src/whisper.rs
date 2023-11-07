@@ -35,7 +35,7 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 }
 
 
-pub fn get_audio_recording(hotkey_count: Arc<Mutex<i32>>, app_handle: AppHandle) -> Result<Vec<f32>> {
+pub fn get_audio_recording(hotkey_count: Arc<Mutex<u32>>, app_handle: AppHandle) -> Result<Vec<f32>> {
     let (buffer, input_stream, config) = setup_audio().expect("Failed to setup audio");
     loop {
         // check if the hotkey has been pressed twice
