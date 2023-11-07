@@ -25,35 +25,52 @@ struct MessageContent {
     content: String,
 }
 
-pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<(), Error> {
+pub async fn get_gpt_response(
+    app_handle: &AppHandle,
+    mut messages: Vec<ChatCompletionRequestMessage>,
+    image_path: String,
+) -> Result<(), Error> {
     println!("Getting GPT response");
-    let mut file = File::open(image_path)?;
-    // Read the contents of the file into a vector
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
 
-    // Encode the buffer as a Base64 string
-    let base64_string = encode(&buffer);
+    // Load the image and encode it as a Base64 string
+    let base64_string = {
+        let mut file = File::open(&image_path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        encode(&buffer)
+    };
+
+    let json_messages: Vec<_> = messages
+        .into_iter()
+        .map(|msg| {
+            match msg.role {
+                Role::User => json!({
+                "role": msg.role.to_string(),
+                "content": [
+                    {
+                        "type": "text",
+                        "text": msg.content.unwrap_or_default(),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": format!("data:image/jpeg;base64,{}", base64_string)
+                        },
+                    }
+                ]
+            }),
+                _ => json!({
+                "role": msg.role.to_string(),
+                "content": msg.content,
+            }),
+            }
+        })
+        .collect();
+
 
     let payload = json!({
         "model": "gpt-4-vision-preview",
-        "messages": [
-          {
-            "role": "user",
-            "content": [
-              {
-                "type": "text",
-                "text": "What’s in this image?"
-              },
-              {
-                "type": "image_url",
-                "image_url": {
-                  "url": format!("data:image/jpeg;base64,{}", base64_string)
-                }
-              }
-            ]
-          }
-        ],
+        "messages": json_messages,
         "stream": true,
         "max_tokens": 150,
     });
@@ -71,7 +88,7 @@ pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompleti
     let mut stream = response.bytes_stream();
 
     while let Some(item) = stream.next().await {
-        let chunk = item?; // Get the chunk as bytes
+        let chunk = item?;
         let chunk_str = String::from_utf8(chunk.to_vec())?;
 
         // Emit a Tauri event with the chunk content
@@ -94,7 +111,6 @@ pub fn create_chat_completion_request_msg(content: String, role: Role) -> ChatCo
 pub fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
     let system_message_content = "This is an AI macos app where the user asks for the AI to write some text via speech-to-text, and then the text is pasted into the field that they currently have selected.\
      The user uses speech-to-text to communicate, so some of their messages may be incorrect - make assumptions based on this.\
-     If the user's message is text between brackets, for example '[BLANK AUDIO]', '[phone ringing], [silence], [background noise]', then say 'I didn't catch that, please try again'.\
      The user will be unable to respond to you after you send a message, so do not ask any questions or ask for clarification.\
       Ensure that your output is just the output they requested - do not ask any follow up questions or include any extra text.\
       The next message is the OCRd text from the users active window - use it to provide context for the user.\
