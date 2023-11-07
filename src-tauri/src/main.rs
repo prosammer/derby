@@ -44,7 +44,7 @@ fn main() {
         .setup( |app| {
             let app_handle = app.handle();
 
-            let _window = create_transcription_window(&app_handle);
+            // let _window = create_transcription_window(&app_handle);
             if get_from_store(&app_handle, "first_run").is_none() {
                 create_first_run_window(&app_handle);
             }

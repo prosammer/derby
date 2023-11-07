@@ -3,8 +3,11 @@ use std::io::Read;
 use anyhow::{Error, Result};
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 use base64::encode;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tauri::{AppHandle, Manager};
+use futures_util::StreamExt;
 
 
 #[derive(Serialize, Deserialize)]
@@ -22,7 +25,8 @@ struct MessageContent {
     content: String,
 }
 
-pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<ChatCompletionRequestMessage, Error> {
+pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<(), Error> {
+    println!("Getting GPT response");
     let mut file = File::open(image_path)?;
     // Read the contents of the file into a vector
     let mut buffer = Vec::new();
@@ -50,10 +54,11 @@ pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_p
             ]
           }
         ],
+        "stream": true,
         "max_tokens": 200,
     });
 
-    let client = reqwest::blocking::Client::new();
+    let client = Client::new();
     let api_url = "https://api.openai.com/v1/chat/completions";
 
     // Make the POST request
@@ -61,15 +66,19 @@ pub fn get_gpt_response(mut messages: Vec<ChatCompletionRequestMessage>, image_p
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", env!("OPENAI_API_KEY")))
         .json(&payload)
-        .send().unwrap();
+        .send().await?;
 
-    let parsed_response = response.json::<ApiResponse>().expect("Failed to parse JSON");
+    let mut stream = response.bytes_stream();
 
-    let content = parsed_response.choices.get(0).expect("No choices in response").message.content.clone();
-    println!("GPT Response: {}", content);
+    while let Some(item) = stream.next().await {
+        let chunk = item?; // Get the chunk as bytes
+        let chunk_str = String::from_utf8(chunk.to_vec())?;
+        println!("Chunk: {}", chunk_str);
 
-    return Ok(create_chat_completion_request_msg(content, Role::Assistant));
-
+        // Emit a Tauri event with the chunk content
+        app_handle.emit_all("gpt_chunk_received", chunk_str).expect("Failed to emit event");
+    }
+    Ok(())
 }
 
 

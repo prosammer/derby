@@ -39,15 +39,9 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     let mut messages = messages_setup();
     let user_message = gpt::create_chat_completion_request_msg(speech_text, Role::User);
     messages.push(user_message);
-    let response = get_gpt_response(messages, screenshot_path);
-    let gpt_content = response.unwrap().content.unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
-    // we need to use tauri to send the gpt response to the frontend
-    if let Err(e) = app_handle_clone.emit_all("gpt-response", Some(gpt_content)) {
-        eprintln!("Error emitting event: {:?}", e);
-    }
-
-
+    let response = rt.block_on(get_gpt_response(&app_handle_clone, messages, screenshot_path));
 
     match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
         Ok(()) => println!("Successfully written to WAV file"),

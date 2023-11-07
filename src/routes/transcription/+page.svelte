@@ -2,28 +2,17 @@
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
 
-  let gptContent = 'render_spectrogram Function\n' +
-    '\n' +
-    'This function generates a visual representation of the spectrogram. It uses the output of the spectrogram function and renders it into a buffer that represents an image, which is then returned as a vector of bytes (Vec<u8>).\n' +
-    '\n' +
-    'Here\'s what happens in the render_spectrogram function:\n' +
-    '\n' +
-    '    Spectrogram Calculation: It first calculates the spectrogram using the previously described function.\n' +
-    '    Pixel Mapping: It maps the spectral data to the pixel grid of the image to be rendered. It calculates how many pixels will represent each spectrum slice based on the provided width of the image.\n' +
-    '    Frequency Mapping: It maps the frequencies to a mel scale, which is a perceptual scale of pitches, using a logarithmic transformation. This transformation involves the constants for mel scale conversion (2595 and 700).\n' +
-    '    Color Mapping: It maps the magnitude of each frequency to a color using a colormap, which is an array of RGB colors. The magnitude is first converted to a decibel scale, then normalized and clamped within the range of the colormap.\n' +
-    '    Image Buffer Construction: It fills an image buffer with the corresponding colors for each pixel, representing the intensity of each frequency at each point in time.';
+  let gptContent = '';
 
   onMount(() => {
     let unlisten: () => void;
 
-    // Immediately invoke the async function to listen to the event
     (async () => {
-      // Listen to the global `gpt-response` event
-      unlisten = await listen('gpt-response', (event) => {
+      // Listen to the 'gpt_chunk_received' event which is emitted for each chunk of data received
+      unlisten = await listen('gpt_chunk_received', (event) => {
         if (typeof event.payload === 'string') {
-          console.log(event.payload);
-          gptContent = event.payload;
+          // Append the new chunk to the existing content
+          gptContent += event.payload;
         } else {
           console.error('Received non-string payload', event.payload);
         }
@@ -31,7 +20,7 @@
     })();
 
     return () => {
-      // This will remove the event listener when the component is unmounted
+      // Clean up the event listener when the component is unmounted
       if (unlisten) unlisten();
     };
   });
@@ -50,4 +39,3 @@
     {gptContent}
   </div>
 </div>
-
