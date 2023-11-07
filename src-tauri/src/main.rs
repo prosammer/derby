@@ -56,6 +56,7 @@ impl TranscriptionState {
 
     fn on_listening(&self, app_handle: AppHandle) {
         println!("Transcription mode: Listening");
+        app_handle.tray_handle().get_item("toggle_button").set_title("Send").expect("Could not set tray item title");
         // set_icon("assets/icons/icon-listening.png", app_handle, false);
 
         let app_handle_clone = app_handle.clone();
@@ -66,6 +67,7 @@ impl TranscriptionState {
 
     fn on_processing(&self, app_handle: AppHandle) {
         println!("Transcription mode: Processing");
+        app_handle.tray_handle().get_item("toggle_button").set_title("Talk").expect("Could not set tray item title");
         // set_icon("assets/icons/icon-processing.png", app_handle, false);
 
         // TODO: I think there's a race condition here
@@ -91,7 +93,9 @@ fn main() {
             }
 
             let app_handle_clone = app_handle.clone();
-            setup_hotkey(app_handle_clone);
+            app_handle.global_shortcut_manager().register("F5", move || {
+                change_transcription_state(&app_handle);
+            }).unwrap();
 
             Ok(())
         })
@@ -105,6 +109,9 @@ fn main() {
             match event {
                 tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
                     match id.as_str() {
+                        "toggle_button" => {
+                            change_transcription_state(&app_handle);
+                        }
                         "settings" => {
                             let window_exists = app_handle.get_window("settings_window").is_some();
                             if !window_exists {
@@ -133,27 +140,24 @@ fn main() {
         _ => {}
     });
 }
+fn change_transcription_state(app_handle: &AppHandle) {
+    let app_state = app_handle.state::<TranscriptionState>();
 
-fn setup_hotkey(app_handle: AppHandle) {
-    app_handle.global_shortcut_manager().register("F5", move || {
-        let app_state = app_handle.state::<TranscriptionState>();
+    let current_mode = {
+        let mode_lock = app_state.mode.lock().unwrap();
+        (*mode_lock).clone() // Clone the current mode to avoid moving it
+    };
 
-        let current_mode = {
-            let mode_lock = app_state.mode.lock().unwrap();
-            (*mode_lock).clone() // Clone the current mode to avoid moving it
-        };
+    let next_mode = match current_mode {
+        TranscriptionMode::Inactive => TranscriptionMode::Listening,
+        TranscriptionMode::Listening => TranscriptionMode::Processing,
+        TranscriptionMode::Processing => TranscriptionMode::Inactive,
+    };
 
-        let next_mode = match current_mode {
-            TranscriptionMode::Inactive => TranscriptionMode::Listening,
-            TranscriptionMode::Listening => TranscriptionMode::Processing,
-            TranscriptionMode::Processing => TranscriptionMode::Inactive,
-        };
+    // Set the new mode, which will also trigger the corresponding function
+    app_state.set_mode(next_mode, &app_handle);
 
-        // Set the new mode, which will also trigger the corresponding function
-        app_state.set_mode(next_mode, &app_handle);
-
-        println!("Shortcut pressed and mode changed to {:?}", next_mode);
-    }).unwrap();
+    println!("Shortcut pressed and mode changed to {:?}", next_mode);
 }
 
 
@@ -202,7 +206,7 @@ fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
 }
 
 fn tray_setup() -> SystemTray {
-    let record = CustomMenuItem::new("talk".to_string(), "Talk");
+    let record = CustomMenuItem::new("toggle_button".to_string(), "Talk");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
     let tray_menu = SystemTrayMenu::new()
