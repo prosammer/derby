@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use futures_util::StreamExt;
 use tokio::fs;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 
 #[derive(Debug)]
@@ -85,21 +85,30 @@ impl GptClient {
     }
 
     async fn send_request_and_emit_events(&self, payload: Value) -> Result<()> {
+        let openai_api_key = env::var("OPENAI_API_KEY")?;
         let response = self.client
             .post(&self.api_url)
             .header(header::CONTENT_TYPE, "application/json")
-            .header(header::AUTHORIZATION, format!("Bearer {}", env!("OPENAI_API_KEY")))
+            .header(header::AUTHORIZATION, format!("Bearer {}", openai_api_key))
             .json(&payload)
             .send()
             .await?;
 
         let mut stream = response.bytes_stream();
+        let mut json_parser = JSONBufferParser::new();
 
         while let Some(item) = stream.next().await {
             let chunk = item?;
             let chunk_str = String::from_utf8(chunk.to_vec())?;
-            self.app_handle.emit_all("gpt_chunk_received", chunk_str)?;
+
+            // Append the chunk to the JSON buffer and process any complete JSON objects
+            json_parser.append(&chunk_str);
+            for content in json_parser.extract_content() {
+                println!("GPT response: {}", content);
+                self.app_handle.emit_all("gpt_chunk_received", content)?;
+            }
         }
+        println!("Final buffer content: {}", json_parser.buffer);
         Ok(())
     }
 
@@ -120,7 +129,9 @@ impl GptClient {
     }
 
     fn is_testing_env(&self) -> bool {
-        env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false)
+        let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
+        println!("is_testing_env: {}", is_testing_env);
+        is_testing_env
     }
 }
 
@@ -146,3 +157,75 @@ pub fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
     return vec![system_message]
 }
 
+
+// JSONBufferParser helps in buffering chunks and extracting complete JSON objects.
+struct JSONBufferParser {
+    buffer: String,
+}
+
+impl JSONBufferParser {
+    pub fn new() -> Self {
+        Self {
+            buffer: String::new(),
+        }
+    }
+
+    fn append(&mut self, chunk: &str) {
+        self.buffer.push_str(chunk);
+    }
+
+    fn extract_content(&mut self) -> Vec<String> {
+        let mut contents = Vec::new();
+        loop {
+            match self.find_json_object_boundaries() {
+                Some((start, end)) => {
+                    let json_str = self.buffer[start..=end].to_owned();
+                    // Attempt to parse the JSON object and extract the content.
+                    if let Some(content) = extract_content_from_json(&json_str) {
+                        contents.push(content);
+                    }
+                    self.buffer.drain(..=end);
+                }
+                None => break,
+            }
+        }
+        contents
+    }
+
+    fn find_json_object_boundaries(&self) -> Option<(usize, usize)> {
+        let mut depth = 0;
+        let mut start_index = None;
+        for (i, ch) in self.buffer.char_indices() {
+            match ch {
+                '{' => {
+                    if depth == 0 {
+                        start_index = Some(i);
+                    }
+                    depth += 1;
+                }
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 && start_index.is_some() {
+                        return Some((start_index.unwrap(), i));
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+}
+
+fn extract_content_from_json(json_str: &str) -> Option<String> {
+    let value: serde_json::Result<serde_json::Value> = serde_json::from_str(json_str);
+
+    if let Ok(val) = value {
+        if let Some(content) = val["choices"].get(0)
+            .and_then(|choice| choice["delta"].get("content"))
+            .and_then(|content| content.as_str()) {
+            return Some(content.to_owned());
+        }
+    }
+
+    None
+}

@@ -3,22 +3,19 @@
   import { listen } from '@tauri-apps/api/event';
   import { writeText } from '@tauri-apps/api/clipboard';
   import { appWindow } from "@tauri-apps/api/window";
-  import { GPTContentProcessor } from "$lib/GPTContentProcessor";
 
   let gptContent = '';
   let hasCopied = false;
-  const gptContentProcessor = new GPTContentProcessor();
 
   onMount(() => {
     let unlisten: () => void;
 
     (async () => {
-      // Listen to the 'gpt_chunk_received' event which is emitted for each chunk of data received
       unlisten = await listen('gpt_chunk_received', (event) => {
         if (typeof event.payload === 'string') {
-          // Process the new chunk and append the extracted content to the existing gptContent
-          const contentToAdd = gptContentProcessor.processChunk(event.payload);
-          gptContent += contentToAdd;
+          // Append the new text chunks to the existing gptContent
+          console.log('Received payload', event.payload);
+          gptContent += event.payload;
         } else {
           console.error('Received non-string payload', event.payload);
         }
