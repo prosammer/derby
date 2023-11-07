@@ -97,6 +97,7 @@ impl GptClient {
         let mut stream = response.bytes_stream();
         let mut json_parser = JSONBufferParser::new();
 
+        self.app_handle.emit_all("gpt_stream_start", json!({ "status": "start" }))?;
         while let Some(item) = stream.next().await {
             let chunk = item?;
             let chunk_str = String::from_utf8(chunk.to_vec())?;
@@ -104,11 +105,9 @@ impl GptClient {
             // Append the chunk to the JSON buffer and process any complete JSON objects
             json_parser.append(&chunk_str);
             for content in json_parser.extract_content() {
-                println!("GPT response: {}", content);
                 self.app_handle.emit_all("gpt_chunk_received", content)?;
             }
         }
-        println!("Final buffer content: {}", json_parser.buffer);
         Ok(())
     }
 

@@ -6,15 +6,24 @@
 
   let gptContent = '';
   let hasCopied = false;
+  let isNewMessage = false;
 
   onMount(() => {
-    let unlisten: () => void;
+    let unlistenChunks: () => void;
+    let unlistenStart: () => void;
 
     (async () => {
-      unlisten = await listen('gpt_chunk_received', (event) => {
+        unlistenStart = await listen('gpt_stream_start', () => {
+          isNewMessage = true; // Set the flag when a new stream starts
+        });
+
+      unlistenChunks = await listen('gpt_chunk_received', (event) => {
+        if (isNewMessage) {
+          gptContent = ''; // Clear the content if the previous stream was complete
+          isNewMessage = false;
+        }
         if (typeof event.payload === 'string') {
           // Append the new text chunks to the existing gptContent
-          console.log('Received payload', event.payload);
           gptContent += event.payload;
         } else {
           console.error('Received non-string payload', event.payload);
@@ -24,7 +33,8 @@
 
     return () => {
       // Clean up the event listener when the component is unmounted
-      if (unlisten) unlisten();
+      if (unlistenChunks) unlistenChunks();
+      if (unlistenStart) unlistenStart();
     };
   });
 
