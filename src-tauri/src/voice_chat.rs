@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use async_openai::types::Role;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle};
 use crate::{gpt, whisper};
 use crate::audio_utils::{ resample_audio, write_to_wav};
-use crate::gpt::{get_gpt_response, messages_setup};
+use crate::gpt::{GptClient, messages_setup};
 use crate::screenshot::{screenshot};
 use crate::whisper::WHISPER_CONTEXT;
 
@@ -41,8 +41,16 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
     messages.push(user_message);
     let rt = tokio::runtime::Runtime::new().unwrap();
 
-    let response = rt.block_on(get_gpt_response(&app_handle_clone, messages, screenshot_path));
+    rt.block_on(async {
+        // Create an instance of GptClient
+        let gpt_client = GptClient::new(app_handle_clone);
 
+        // Call the method to get the GPT response
+        match gpt_client.get_gpt_response(messages, screenshot_path.clone()).await {
+            Ok(_) => println!("GPT response received successfully"),
+            Err(e) => eprintln!("Error while getting GPT response: {}", e),
+        }
+    });
     match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
         Ok(()) => println!("Successfully written to WAV file"),
         Err(e) => eprintln!("Failed to write to WAV file: {}", e),
