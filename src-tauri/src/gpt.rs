@@ -55,7 +55,7 @@ pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompleti
           }
         ],
         "stream": true,
-        "max_tokens": 200,
+        "max_tokens": 150,
     });
 
     let client = Client::new();
@@ -73,11 +73,12 @@ pub async fn get_gpt_response(app_handle: &AppHandle, messages: Vec<ChatCompleti
     while let Some(item) = stream.next().await {
         let chunk = item?; // Get the chunk as bytes
         let chunk_str = String::from_utf8(chunk.to_vec())?;
-        println!("Chunk: {}", chunk_str);
+        println!("{}", chunk_str);
 
         // Emit a Tauri event with the chunk content
         app_handle.emit_all("gpt_chunk_received", chunk_str).expect("Failed to emit event");
     }
+    println!("Finished getting GPT response");
     Ok(())
 }
 

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
+  import { GPTContentProcessor } from "$lib/GPTContentProcessor";
 
   let gptContent = '';
+  const gptContentProcessor = new GPTContentProcessor();
 
   onMount(() => {
     let unlisten: () => void;
@@ -11,8 +13,9 @@
       // Listen to the 'gpt_chunk_received' event which is emitted for each chunk of data received
       unlisten = await listen('gpt_chunk_received', (event) => {
         if (typeof event.payload === 'string') {
-          // Append the new chunk to the existing content
-          gptContent += event.payload;
+          // Process the new chunk and append the extracted content to the existing gptContent
+          const contentToAdd = gptContentProcessor.processChunk(event.payload);
+          gptContent += contentToAdd;
         } else {
           console.error('Received non-string payload', event.payload);
         }
