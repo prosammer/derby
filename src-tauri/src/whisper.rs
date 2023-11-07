@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
-use tauri::{AppHandle, Icon};
+use tauri::{AppHandle, Icon, Manager};
+use crate::{TranscriptionMode, TranscriptionState};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
@@ -35,19 +36,27 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 }
 
 
-pub fn get_audio_recording(hotkey_count: Arc<Mutex<u32>>, app_handle: AppHandle) -> Result<Vec<f32>> {
+pub fn get_audio_recording(app_handle: AppHandle) -> Result<Vec<f32>, anyhow::Error> {
     let (buffer, input_stream, config) = setup_audio().expect("Failed to setup audio");
-    loop {
-        // check if the hotkey has been pressed twice
-        if hotkey_count.lock().unwrap().clone() % 2 == 0 {
-            println!("Hotkey pressed, stopping audio");
-            input_stream.pause().expect("Failed to pause stream");
-            // let samples = convert_stereo_to_mono_audio(buffer).unwrap();
-            // let samples = make_audio_louder(&buffer, 1.0);
-            // let sampling_freq = config.sample_rate.0 as f32 / 2.0; // TODO: Divide by 2 because of stereo to mono
 
+    loop {
+        let app_state = app_handle.state::<TranscriptionState>();
+        // Lock the mode to check its value
+        let current_mode = {
+            let mode_lock = app_state.mode.lock().unwrap();
+            (*mode_lock).clone() // Clone the current mode to avoid moving it
+        };
+
+        // Check if the mode is not Listening (which means recording should stop)
+        if current_mode != TranscriptionMode::Listening {
+            println!("Not in Listening mode, stopping audio");
+            drop(current_mode);
+            input_stream.pause().expect("Failed to pause stream");
             return Ok(buffer.lock().unwrap().clone());
         }
+        // It's important to not hold the lock while sleeping to avoid deadlocks
+        drop(current_mode); // Explicitly drop the lock before sleeping
+        std::thread::sleep(std::time::Duration::from_millis(200)); // Sleep to prevent a busy-wait loop
     }
 }
 
