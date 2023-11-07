@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::thread::spawn;
 use async_openai::types::Role;
 use tauri::{AppHandle};
@@ -8,7 +7,7 @@ use crate::gpt::{GptClient, messages_setup};
 use crate::screenshot::{screenshot};
 use crate::whisper::WHISPER_CONTEXT;
 
-pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mutex<i32>>) {
+pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
     // record audio in this thread until the hotkey is pressed again
     // ocr the screenshot
     let screenshot_handle = spawn(|| {
@@ -18,14 +17,13 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle, hotkey_count: Arc<Mute
 
     let app_handle_clone = app_handle.clone();
 
-
     whisper::init_whisper_context(&app_handle);
     let ctx = WHISPER_CONTEXT.get().expect("WhisperContext not initialized");
     let mut state = ctx.create_state().expect("failed to create key");
 
     println!("Initialization complete, starting audio thread");
     // audio_res is f32, 48khz, float data from CPAL
-    let audio_res: anyhow::Result<Vec<f32>>= whisper::get_audio_recording(hotkey_count, app_handle);
+    let audio_res: anyhow::Result<Vec<f32>>= whisper::get_audio_recording(app_handle);
 
     let audio_vec = audio_res.unwrap();
     let resampled_audio = resample_audio(&audio_vec, 48000, 16000);
