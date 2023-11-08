@@ -3,21 +3,17 @@
 
   import { appDataDir, resolve } from "@tauri-apps/api/path";
   import { download } from "tauri-plugin-upload-api";
-  import { writable } from "svelte/store";
 
   let count = 5;
   let downloading = false;
   let downloadSuccess = false;
   let intervalId: number;
-  let downloadProgress = writable(0);
 
   export async function downloadModelFile(url: string, filename: string) {
     const appDataDirPath = await appDataDir();
     const path = await resolve(appDataDirPath, filename);
 
-    await download(url, path, (progress, total) => {
-      downloadProgress.set((progress / total) * 100); // Update the progress percentage
-    });
+    await download(url, path);
   }
 
 
@@ -49,11 +45,13 @@
   <p class="text-lg text-center mb-2">
     {#if count > 0}
       We will ask for screen recording permissions in: {count}
-    {:else if downloading}
-      Downloading your AI model...
-      <div class="progress-bar">
-        <div class="progress" style="width: {downloadProgress}%"></div>
-      </div>
+    {/if}
+  </p>
+    {#if downloading}
+      <p class="text-lg text-center mb-2">Downloading your AI model...</p>
+<!--      <div class="progress-bar">-->
+<!--        <div class="progress" style="width: {progressBarWidth};"></div>-->
+<!--      </div>-->
     {:else if downloadSuccess}
       <div class="flex items-center justify-center space-x-2">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
@@ -62,17 +60,4 @@
         <span>Download successful!</span>
       </div>
     {/if}
-  </p>
 </div>
-<style>
-    .progress-bar {
-        width: 100%;
-        background-color: #eee;
-    }
-    .progress {
-        height: 20px;
-        background-color: #4CAF50;
-        width: 0;
-        transition: width 0.5s;
-    }
-</style>
