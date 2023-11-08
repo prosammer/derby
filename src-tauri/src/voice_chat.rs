@@ -10,8 +10,9 @@ use crate::whisper::WHISPER_CONTEXT;
 pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
     // record audio in this thread until the hotkey is pressed again
     // ocr the screenshot
+    let app_handle_clone = app_handle.clone();
     let screenshot_handle = spawn(|| {
-       let image_path = screenshot();
+       let image_path = screenshot(app_handle_clone);
         return image_path;
     });
 
@@ -49,9 +50,9 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
             Err(e) => eprintln!("Error while getting GPT response: {}", e),
         }
     });
-    match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
-        Ok(()) => println!("Successfully written to WAV file"),
-        Err(e) => eprintln!("Failed to write to WAV file: {}", e),
-    }
+    // match write_to_wav(&resampled_audio, "/Users/samfinton/Downloads/output_resampled.wav") {
+    //     Ok(()) => println!("Successfully written to WAV file"),
+    //     Err(e) => eprintln!("Failed to write to WAV file: {}", e),
+    // }
 }
 

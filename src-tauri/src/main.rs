@@ -8,6 +8,7 @@ mod gpt;
 mod screenshot;
 mod text_to_speech;
 
+use std::env;
 use std::sync::{ Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
@@ -108,7 +109,8 @@ fn main() {
             app_handle.manage(TranscriptionState::new());
 
             // let _window = create_transcription_window(&app_handle);
-            if get_from_store(&app_handle, "first_run").is_none() {
+            let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
+            if get_from_store(&app_handle, "first_run").is_none() || is_testing_env {
                 create_first_run_window(&app_handle);
             }
 
@@ -123,6 +125,7 @@ fn main() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--flag1", "--flag2"])))
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_upload::init())
         .invoke_handler(tauri::generate_handler![request_screen_recording_permissions])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
@@ -229,7 +232,7 @@ fn tray_setup() -> SystemTray {
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit").accelerator("Cmd+Q");
     let tray_menu = SystemTrayMenu::new()
-        .add_item(settings)
+        // .add_item(settings)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
 
