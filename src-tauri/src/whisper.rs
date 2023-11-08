@@ -15,9 +15,6 @@ use crate::{TranscriptionMode, TranscriptionState};
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_FILE_NAME: &str = "ggml-base.en.bin";
-const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
-const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_green_512.png";
-const SESSION_START_SOUND_PATH: &str = "resources/assets/session_start.wav";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
