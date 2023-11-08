@@ -10,27 +10,29 @@ use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Icon, Manager};
+use tauri::api::path::app_data_dir;
 use crate::{TranscriptionMode, TranscriptionState};
 
 pub const LATENCY_MS: f32 = 30000.0;
-pub const WHISPER_PATH: &str = "resources/ggml-base.en.bin";
+pub const WHISPER_FILE_NAME: &str = "ggml-base.en.bin";
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
 const APP_ICON_RECORDING: &str = "resources/assets/sigma_master_green_512.png";
 const SESSION_START_SOUND_PATH: &str = "resources/assets/session_start.wav";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
-    let resource_path = app_handle.path_resolver()
-        .resolve_resource(WHISPER_PATH)
-        .expect("Failed to resolve whisper model resource path");
+    let config = app_handle.config();
+    let app_data_dir_path = app_data_dir(&*config).expect("Failed to get app data dir");
 
-    if !resource_path.exists() && !resource_path.is_file() {
+    let whisper_path = app_data_dir_path.join(WHISPER_FILE_NAME);
+
+    if !whisper_path.exists() && !whisper_path.is_file() {
         panic!("expected a whisper directory")
         // TODO: Should display error to user
     }
 
     if WHISPER_CONTEXT.get().is_none() {
-        let ctx = WhisperContext::new(resource_path.to_str().unwrap()).expect("Failed to open model");
+        let ctx = WhisperContext::new(whisper_path.to_str().unwrap()).expect("Failed to open model");
         WHISPER_CONTEXT.set(ctx).expect("Failed to set WhisperContext");
     }
 }

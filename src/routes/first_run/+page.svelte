@@ -4,6 +4,7 @@
   import { appDataDir, resolve } from "@tauri-apps/api/path";
   import { download } from "tauri-plugin-upload-api";
   import { appWindow } from "@tauri-apps/api/window";
+  import { exists } from "@tauri-apps/api/fs";
 
   let count = 5;
   let downloading = false;
@@ -14,7 +15,14 @@
     const appDataDirPath = await appDataDir();
     const path = await resolve(appDataDirPath, filename);
 
-    await download(url, path);
+    const fileExists = await exists(path);
+
+    if (!fileExists) {
+      await download(url, path);
+      return true;
+    } else {
+      return false;
+    }
   }
 
 

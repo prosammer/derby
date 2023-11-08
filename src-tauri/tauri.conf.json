@@ -58,7 +58,6 @@
         "minimumSystemVersion": "12"
       },
       "resources": [
-        "resources/ggml-base.en.bin",
         "resources/assets/sigma_master_512.png",
         "resources/assets/sigma_master_green_512.png",
         "resources/assets/session_start.wav",
