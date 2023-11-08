@@ -18,6 +18,10 @@
     "allowlist": {
       "all": false,
       "fs": {
+        "all": true,
+        "scope": ["$APPDATA/*"]
+      },
+      "path": {
         "all": true
       },
       "window": {
