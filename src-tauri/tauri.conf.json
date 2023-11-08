@@ -7,7 +7,7 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "octoguide",
+    "productName": "derby",
     "version": "0.1.0"
   },
   "tauri": {

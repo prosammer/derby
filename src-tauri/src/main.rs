@@ -87,8 +87,11 @@ impl TranscriptionState {
         app_handle.tray_handle().set_icon_as_template(true).unwrap();
         app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
 
-        // TODO: I think there's a race condition here
-        let _window = create_transcription_window(&app_handle);
+        let window_exists = app_handle.get_window("transcription_window").is_some();
+
+        if !window_exists {
+            let _window = create_transcription_window(&app_handle);
+        }
     }
 }
 
@@ -168,7 +171,7 @@ fn change_transcription_state(app_handle: &AppHandle) {
     let next_mode = match current_mode {
         TranscriptionMode::Inactive => TranscriptionMode::Listening,
         TranscriptionMode::Listening => TranscriptionMode::Processing,
-        TranscriptionMode::Processing => TranscriptionMode::Inactive,
+        TranscriptionMode::Processing => TranscriptionMode::Listening,
     };
 
     // Set the new mode, which will also trigger the corresponding function

@@ -16,6 +16,7 @@
 
     (async () => {
         unlistenStart = await listen('gpt_stream_start', () => {
+          console.log('New stream event received');
           isNewMessage = true; // Set the flag when a new stream starts
         });
 
