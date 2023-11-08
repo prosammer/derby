@@ -3,6 +3,7 @@
 
   import { appDataDir, resolve } from "@tauri-apps/api/path";
   import { download } from "tauri-plugin-upload-api";
+  import { appWindow } from "@tauri-apps/api/window";
 
   let count = 5;
   let downloading = false;
@@ -25,6 +26,7 @@
     ).then(() => {
       downloading = false;
       downloadSuccess = true;
+      setTimeout(() => appWindow.close(), 3000);
     }).catch((error: Error) => {
       console.error('Download failed:', error);
       downloading = false;
