@@ -17,5 +17,5 @@
   });
 </script>
 
-<h1>Welcome to octoguide!</h1>
+<h1>Welcome to Derby!</h1>
 <h2>We will ask for screen recording permissions in: {count}</h2>

@@ -49,7 +49,6 @@ pub fn get_audio_recording(app_handle: AppHandle) -> Result<Vec<f32>, anyhow::Er
 
         // Check if the mode is not Listening (which means recording should stop)
         if current_mode != TranscriptionMode::Listening {
-            println!("Not in Listening mode, stopping audio");
             drop(current_mode);
             input_stream.pause().expect("Failed to pause stream");
             return Ok(buffer.lock().unwrap().clone());
