@@ -40,12 +40,13 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
     messages.push(user_message);
     let rt = tokio::runtime::Runtime::new().unwrap();
 
+    let app_handle_2 = app_handle_clone.clone();
     rt.block_on(async {
         // Create an instance of GptClient
         let gpt_client = GptClient::new(app_handle_clone);
 
         // Call the method to get the GPT response
-        match gpt_client.get_gpt_response(messages, screenshot_path.clone()).await {
+        match gpt_client.get_gpt_response(messages, screenshot_path.clone(), app_handle_2).await {
             Ok(_) => println!("GPT response received successfully"),
             Err(e) => eprintln!("Error while getting GPT response: {}", e),
         }

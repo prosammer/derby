@@ -8,6 +8,9 @@
   import { info, error, attachConsole } from "tauri-plugin-log-api";
   import { invoke } from "@tauri-apps/api";
   import { CheckCircle2, CircleDashed} from 'lucide-svelte';
+  import { Input } from "$lib/components/ui/input";
+  import { Button } from "$lib/components/ui/button";
+  import { StoreManager } from "$lib/storeManager";
 
   const detach = async () => {
     await attachConsole();
@@ -17,9 +20,33 @@
   let notificationGranted = false;
   let screenRecordGranted = false;
   let audioRecordGranted = false;
+  let apiToken = '';
+  let apiTokenValid = false;
+  let validationAttempted = false;
+  $: tokenInputClass = (apiTokenValid || !validationAttempted) ? '' : 'border-red-400';
 
+  const storeManager = new StoreManager('.settings.dat');
 
-export async function downloadModelFile(url: string, filename: string) {
+async function checkApiTokenValidity() {
+  try {
+    let returnedValidity: boolean = await invoke('check_api_key_validity', { apiKey: apiToken });
+    if (returnedValidity) {
+      await info('API token is valid');
+      await storeManager.set('api_token', apiToken);
+      await info('API token saved to .settings.dat')
+      validationAttempted = true;
+      apiTokenValid = true;
+    } else {
+      await error('API token is invalid');
+      validationAttempted = true;
+      apiTokenValid = false;
+    }
+  } catch (e) {
+    await error('Failed to check API token validity: ' + e);
+    apiTokenValid = false;
+  }
+}
+  async function downloadModelFile(url: string, filename: string) {
   const appDataDirPath = await appDataDir();
   const path = await resolve(appDataDirPath, filename);
 
@@ -110,8 +137,12 @@ async function initialize() {
 
   // Check that all permissions are granted and the download is complete
   if (notificationGranted && screenRecordGranted && audioRecordGranted && downloadSuccess) {
+    // wait until apiTokenValid is set to true, then close the window
+    while (!apiTokenValid) {
+      await delay(500);
+    }
     await info("Successfully checked for permissions and downloaded file, closing the window.");
-    await delay(2000);
+    await delay(1000);
     await appWindow.close();
   }
 }
@@ -154,6 +185,24 @@ function delay(ms: number) {
       <span class="ml-2">Audio Recording permissions</span>
     </li>
     <li class="flex items-center">
+      {#if apiTokenValid}
+        <CheckCircle2/>
+      {:else}
+        <CircleDashed />
+      {/if}
+      <div class="ml-2 flex w-full max-w-sm items-center space-x-2">
+        <Input
+          id="token_input"
+          bind:value={apiToken}
+          on:keydown={(e) => (e.key === 'Enter' ? checkApiTokenValidity() : null)}
+          type="test"
+          class="{tokenInputClass} animated_validation"
+          placeholder="Enter your OpenAI API Token"
+        />
+        <Button class="bg-[#07323A] text-white hover:bg-[#0E5A65]" on:click={checkApiTokenValidity}>Test</Button>
+      </div>
+    </li>
+    <li class="flex items-center">
       {#if downloadSuccess}
         <CheckCircle2 />
       {:else}
@@ -163,3 +212,8 @@ function delay(ms: number) {
     </li>
   </ul>
 </div>
+<style>
+  .animated_validation {
+      transition: background-color 1s ease;
+  }
+</style>

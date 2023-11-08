@@ -1,6 +1,6 @@
 use std::env;
 use std::time::Duration;
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
 use base64::encode;
 use reqwest::{Client, header};
@@ -8,8 +8,34 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use futures_util::StreamExt;
 use tokio::{fs, time};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt};
+use crate::stores::get_from_store;
 
+const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+#[tauri::command]
+pub async fn check_api_key_validity(api_key: String) -> Result<bool, String> {
+    // Attempt to list models as a lightweight check
+    let client = Client::new();
+    let response = client
+        .get(format!("{}/models", OPENAI_BASE_URL))
+        .header(header::AUTHORIZATION, format!("Bearer {}", api_key))
+        .send()
+        .await;
+
+    match response {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                Ok(true) // The API key is valid
+            } else if resp.status().as_u16() == 401 {
+                Ok(false) // Unauthorized, API key is not valid
+            } else {
+                // Some other error occurred
+                Err(format!("Failed to validate API key: HTTP {}", resp.status()))
+            }
+        },
+        Err(err) => Err(format!("Failed to make request: {}", err)),
+    }
+}
 
 #[derive(Debug)]
 pub struct GptClient {
@@ -23,11 +49,11 @@ impl GptClient {
         Self {
             app_handle,
             client: Client::new(),
-            api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            api_url: format!("{}/chat/completions", OPENAI_BASE_URL),
         }
     }
 
-    pub async fn get_gpt_response(&self, mut messages: Vec<ChatCompletionRequestMessage>, image_path: String) -> Result<()> {
+    pub async fn get_gpt_response(&self, mut messages: Vec<ChatCompletionRequestMessage>, image_path: String, app_handle: AppHandle) -> Result<()> {
         if self.is_testing_env() {
             self.emit_test_events().await?;
             return Ok(());
@@ -36,7 +62,7 @@ impl GptClient {
         let base64_string = self.encode_image(image_path).await?;
         let json_messages = self.prepare_messages_for_payload(messages, &base64_string);
         let payload = self.build_payload(json_messages)?;
-        self.send_request_and_emit_events(payload).await?;
+        self.send_request_and_emit_events(payload, app_handle).await?;
         Ok(())
     }
 
@@ -85,8 +111,10 @@ impl GptClient {
         }))
     }
 
-    async fn send_request_and_emit_events(&self, payload: Value) -> Result<()> {
-        let openai_api_key = env::var("OPENAI_API_KEY")?;
+    async fn send_request_and_emit_events(&self, payload: Value, app_handle: AppHandle) -> Result<()> {
+        let openai_api_key = get_from_store(&app_handle, "api_token")
+            .ok_or(anyhow!("OpenAI API key not found"))?;
+
         let response = self.client
             .post(&self.api_url)
             .header(header::CONTENT_TYPE, "application/json")
