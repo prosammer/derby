@@ -26,7 +26,7 @@ dirs = "5.0"
 tauri-plugin-positioner = "1.0.4"
 tauri-plugin-autostart = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-tauri-plugin-upload = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+tauri-plugin-upload = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "download-throttled-events" }
 whisper-rs = { git = "https://github.com/tazz4843/whisper-rs", branch = "master" }
 cpal = "0.15.2"
 anyhow = "1.0.75"

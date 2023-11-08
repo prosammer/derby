@@ -4988,7 +4988,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-upload"
 version = "0.0.0"
-source = "git+https://github.com/tauri-apps/plugins-workspace?branch=v1#6865299149ffd183365e3ff291acf3edac78ca61"
+source = "git+https://github.com/tauri-apps/plugins-workspace?branch=download-throttled-events#a71a0192b85654c7a888ceff0192f0f0e1384208"
 dependencies = [
  "futures-util",
  "log",
