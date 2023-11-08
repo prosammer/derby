@@ -7,6 +7,7 @@
   import { isPermissionGranted } from '@tauri-apps/api/notification';
   import { info, error, attachConsole } from "tauri-plugin-log-api";
   import { invoke } from "@tauri-apps/api";
+  import { CheckCircle2, CircleDashed} from 'lucide-svelte';
 
   const detach = async () => {
     await attachConsole();
@@ -124,62 +125,41 @@ function delay(ms: number) {
 }
 </script>
 
-<div class="flex flex-col items-center justify-center h-screen p-4 bg-gray-100">
-  <h1 class="text-4xl font-bold text-center mb-6">Welcome to Derby!</h1>
+<div class="flex flex-col items-center justify-center h-screen p-4 bg-gray-100 space-y-6">
+  <h1 class="text-4xl font-bold text-center">Welcome to Derby!</h1>
   <h3>Checking for permissions...</h3>
-  <ul>
-    <li>
+  <ul class="space-y-2">
+    <li class="flex items-center">
       {#if notificationGranted}
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
-        </svg>
-
+        <CheckCircle2/>
       {:else}
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <CircleDashed />
       {/if}
-        <span>Notification permissions</span>
+      <span class="ml-2">Notification permissions</span>
     </li>
-    <li>
+    <li class="flex items-center">
       {#if screenRecordGranted}
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
-        </svg>
+        <CheckCircle2/>
       {:else}
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <CircleDashed />
       {/if}
-      <span>Screen Recording permissions</span>
+      <span class="ml-2">Screen Recording permissions</span>
     </li>
-    <li>
+    <li class="flex items-center">
       {#if audioRecordGranted}
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
-        </svg>
+        <CheckCircle2/>
       {:else}
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <CircleDashed />
       {/if}
-      <span>Audio Recording permissions</span>
+      <span class="ml-2">Audio Recording permissions</span>
+    </li>
+    <li class="flex items-center">
+      {#if downloadSuccess}
+        <CheckCircle2 />
+      {:else}
+        <CircleDashed id="spinning_downloading"  class="animate-spin duration-3000 ease-linear"/>
+      {/if}
+      <span class="ml-2">AI model downloaded</span>
     </li>
   </ul>
-</div>
-<div class="h-10"></div>
-<div class="flex flex-col items-center justify-center h-screen p-4 bg-gray-100">
-{#if downloading}
-  <p class="text-lg text-center mb-2">Downloading your AI model...</p>
-<!--      <div class="progress-bar">-->
-<!--        <div class="progress" style="width: {progressBarWidth};"></div>-->
-<!--      </div>-->
-{:else if downloadSuccess}
-  <div class="flex items-center justify-center space-x-2">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-    <span>Download successful!</span>
-  </div>
-{/if}
 </div>
