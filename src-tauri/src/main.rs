@@ -232,7 +232,7 @@ fn tray_setup() -> SystemTray {
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit").accelerator("Cmd+Q");
     let tray_menu = SystemTrayMenu::new()
-        .add_item(settings)
+        // .add_item(settings)
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
 
