@@ -29,6 +29,9 @@
       },
       "globalShortcut": {
         "all": true
+      },
+      "notification": {
+        "all": true
       }
     },
     "macOSPrivateApi": true,

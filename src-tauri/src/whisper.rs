@@ -94,26 +94,6 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     Ok((buffer_clone, input_stream, config))
 }
 
-fn set_icon(path_str: &str, app_handle: &AppHandle, template: bool) {
-
-    let resolved_path = app_handle.path_resolver()
-        .resolve_resource(path_str)
-        .expect("Failed to resolve session start sound resource path");
-
-    if resolved_path.exists() && resolved_path.is_file() {
-        let icon = Icon::File(resolved_path);
-        if !template {
-            app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
-        }
-        app_handle.tray_handle().set_icon(icon).expect("Failed to set icon");
-        if template {
-            app_handle.tray_handle().set_icon_as_template(template).expect("Failed to set icon as template");
-        }
-    } else {
-        println!("Icon path does not exist: {}", path_str);
-    }
-}
-
 pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
     let mut params = FullParams::new(SamplingStrategy::default());
     params.set_print_progress(false);
@@ -150,4 +130,35 @@ pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
 
 fn err_fn(err: cpal::StreamError) {
     eprintln!("an error occurred on stream: {}", err);
+}
+
+// https://discord.com/channels/616186924390023171/1087197552094490754/1087378596626173962
+#[tauri::command]
+pub fn request_mic_permissions() -> bool {
+    use std::sync::mpsc;
+
+    use block::ConcreteBlock;
+    use cocoa::base::YES;
+    use objc::runtime::BOOL;
+    use objc::runtime::{Class, Object};
+    use objc::{msg_send, sel, sel_impl};
+
+    let (tx, mut rx) = mpsc::channel();
+
+    unsafe {
+        let av_audio_session_class = Class::get("AVAudioSession").unwrap();
+        let shared_instance: *mut Object = msg_send![av_audio_session_class, sharedInstance];
+
+        let block = ConcreteBlock::new(move |granted: BOOL| {
+            println!("Permission granted: {}", granted == YES);
+            tx.send(()).unwrap();
+        });
+        let block = block.copy();
+
+        let _: () = msg_send![shared_instance, requestRecordPermission: block];
+    }
+
+    // Wait for the callback to be called
+    let response = rx.recv().unwrap();
+    return response == ();
 }
