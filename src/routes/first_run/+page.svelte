@@ -3,7 +3,7 @@
   import { appDataDir, resolve } from "@tauri-apps/api/path";
   import { download } from "tauri-plugin-upload-api";
   import { appWindow } from "@tauri-apps/api/window";
-  import { exists } from "@tauri-apps/api/fs";
+  import { createDir, exists } from "@tauri-apps/api/fs";
   import { isPermissionGranted } from '@tauri-apps/api/notification';
   import { info, error, attachConsole } from "tauri-plugin-log-api";
   import { invoke } from "@tauri-apps/api";
@@ -48,6 +48,12 @@ async function checkApiTokenValidity() {
 }
   async function downloadModelFile(url: string, filename: string) {
   const appDataDirPath = await appDataDir();
+  // check that this dir exists, if not, create it
+  const dirExists = await exists(appDataDirPath);
+  if (!dirExists) {
+    await info('Creating app data directory at ' + appDataDirPath);
+    await createDir(appDataDirPath);
+  }
   const path = await resolve(appDataDirPath, filename);
 
   const fileExists = await exists(path);
