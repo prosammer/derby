@@ -8,8 +8,9 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 use std::sync::{Arc, Mutex};
 use anyhow::{Result, Error};
 use cpal::{Stream, StreamConfig};
+use log::{error, info};
 use once_cell::sync::OnceCell;
-use tauri::{AppHandle, Icon, Manager};
+use tauri::{AppHandle, Manager};
 use tauri::api::path::app_data_dir;
 use crate::{TranscriptionMode, TranscriptionState};
 
@@ -63,11 +64,11 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     let input_device = host
         .default_input_device()
         .expect("failed to get default input device");
-    println!("Using default input device: \"{}\"", input_device.name().unwrap());
+    info!("Using default input device: \"{}\"", input_device.name().unwrap());
     let config = input_device
         .default_input_config()
         .expect("Failed to get default input config").config();
-    println!("Default input config: {:?}", config);
+    info!("Default input config: {:?}", config);
 
 
     // The buffer to share samples
@@ -85,12 +86,12 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     };
 
     // Build streams.
-    println!(
+    info!(
         "Attempting to build both streams with f32 samples and `{:?}`.",
         config
     );
     let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None).unwrap();
-    println!("Successfully built stream.");
+    info!("Successfully built stream.");
     Ok((buffer_clone, input_stream, config))
 }
 
@@ -129,7 +130,7 @@ pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
 }
 
 fn err_fn(err: cpal::StreamError) {
-    eprintln!("an error occurred on stream: {}", err);
+    error!("an error occurred on stream: {}", err);
 }
 
 // https://discord.com/channels/616186924390023171/1087197552094490754/1087378596626173962

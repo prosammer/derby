@@ -7,6 +7,7 @@ use reqwest::{Client, header};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use futures_util::StreamExt;
+use log::{error, info};
 use tokio::{fs, time};
 use tokio::io::{AsyncReadExt};
 use crate::stores::get_from_store;
@@ -62,6 +63,8 @@ impl GptClient {
         let base64_string = self.encode_image(image_path).await?;
         let json_messages = self.prepare_messages_for_payload(messages, &base64_string);
         let payload = self.build_payload(json_messages)?;
+        // print the first 100 characters of the payload
+        info!("Payload first 100 chars: {}", payload.to_string().chars().take(100).collect::<String>());
         self.send_request_and_emit_events(payload, app_handle).await?;
         Ok(())
     }
@@ -113,7 +116,11 @@ impl GptClient {
 
     async fn send_request_and_emit_events(&self, payload: Value, app_handle: AppHandle) -> Result<()> {
         let openai_api_key = get_from_store(&app_handle, "api_token")
-            .ok_or(anyhow!("OpenAI API key not found"))?;
+            .ok_or_else(|| {
+                error!("OpenAI API key not found");
+                anyhow!("OpenAI API key not found")
+            })?
+            .to_string().replace("\"", "");
 
         let response = self.client
             .post(&self.api_url)
@@ -127,7 +134,12 @@ impl GptClient {
         let mut json_parser = JSONBufferParser::new();
 
         self.app_handle.emit_all("gpt_stream_start", json!({ "status": "start" }))?;
+        let mut first_chunk = true;
         while let Some(item) = stream.next().await {
+            if first_chunk {
+                info!("First chunk: {:?}", item);
+                first_chunk = false;
+            }
             let chunk = item?;
             let chunk_str = String::from_utf8(chunk.to_vec())?;
 
@@ -159,7 +171,7 @@ impl GptClient {
 
     fn is_testing_env(&self) -> bool {
         let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
-        println!("is_testing_env: {}", is_testing_env);
+        info!("Running in testing environment: {}", is_testing_env);
         is_testing_env
     }
 }
