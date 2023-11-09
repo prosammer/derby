@@ -12,14 +12,19 @@ use std::env;
 use std::sync::{ Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
+use log::{info, LevelFilter};
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Icon, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri::TitleBarStyle::{Transparent};
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_log::fern::colors::ColoredLevelConfig;
+use tauri_plugin_log::LogTarget;
 use tauri_plugin_positioner::{Position, WindowExt};
-use crate::stores::{get_from_store, set_in_store};
 
+use crate::stores::{get_from_store, set_in_store};
+use crate::gpt::check_api_key_validity;
 use crate::voice_chat::user_speech_to_gpt_response;
 use crate::screenshot::request_screen_recording_permissions;
+use crate::whisper::request_mic_permissions;
 
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
 const APP_ICON_LISTENING: &str = "resources/assets/sigma_master_green_512.png";
@@ -54,7 +59,6 @@ impl TranscriptionState {
     }
 
     fn on_inactive(&self, app_handle: AppHandle) {
-        println!("Transcription mode: Inactive");
         let resource_path = app_handle.path_resolver()
             .resolve_resource(APP_ICON_DEFAULT)
             .expect("Failed to resolve icon resource path");
@@ -64,7 +68,6 @@ impl TranscriptionState {
     }
 
     fn on_listening(&self, app_handle: AppHandle) {
-        println!("Transcription mode: Listening");
         let resource_path = app_handle.path_resolver()
             .resolve_resource(APP_ICON_LISTENING)
             .expect("Failed to resolve icon resource path");
@@ -79,8 +82,6 @@ impl TranscriptionState {
     }
 
     fn on_processing(&self, app_handle: AppHandle) {
-        println!("Transcription mode: Processing");
-
         let resource_path = app_handle.path_resolver()
             .resolve_resource(APP_ICON_DEFAULT)
             .expect("Failed to resolve icon resource path");
@@ -126,7 +127,17 @@ fn main() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--flag1", "--flag2"])))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_upload::init())
-        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions])
+        .plugin(tauri_plugin_log::Builder::default().targets([
+            LogTarget::LogDir,
+            LogTarget::Stdout,
+            // LogTarget::Webview,
+        ])
+            .level(LevelFilter::Info)
+            .level_for("tauri", LevelFilter::Warn)
+            .level_for("tao", LevelFilter::Warn)
+            .with_colors(ColoredLevelConfig::default())
+            .build())
+        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions, request_mic_permissions, check_api_key_validity])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {
@@ -178,9 +189,9 @@ fn change_transcription_state(app_handle: &AppHandle) {
     };
 
     // Set the new mode, which will also trigger the corresponding function
+    info!("Changing mode from {:?} to {:?}", current_mode, next_mode);
     app_state.set_mode(next_mode, &app_handle);
 
-    println!("Shortcut pressed and mode changed to {:?}", next_mode);
 }
 
 

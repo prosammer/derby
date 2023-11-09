@@ -17,7 +17,7 @@ tauri-build = { version = "1.5.0", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.5.2", features = [ "path-all", "window-all", "global-shortcut-all", "macos-private-api", "fs-all", "system-tray", "icon-png"] }
+tauri = { version = "1.5.2", features = [ "notification-all", "path-all", "window-all", "global-shortcut-all", "macos-private-api", "fs-all", "system-tray", "icon-png"] }
 dotenv = "0.15.0"
 async-openai = "0.15"
 tokio = "1.29.1"
@@ -27,6 +27,7 @@ tauri-plugin-positioner = "1.0.4"
 tauri-plugin-autostart = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-upload = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "download-throttled-events" }
+tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1", features = ["colored"] }
 whisper-rs = { git = "https://github.com/tazz4843/whisper-rs", branch = "master" }
 cpal = "0.15.2"
 anyhow = "1.0.75"
@@ -49,6 +50,9 @@ crossbeam = "0.8.2"
 hound = "3.5.1"
 base64 = "0.21.5"
 futures-util = "0.3.29"
+log = "0.4.20"
+cocoa = "0.25.0"
+block = "0.1.6"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

@@ -1,73 +1,225 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-
   import { appDataDir, resolve } from "@tauri-apps/api/path";
   import { download } from "tauri-plugin-upload-api";
   import { appWindow } from "@tauri-apps/api/window";
-  import { exists } from "@tauri-apps/api/fs";
+  import { createDir, exists } from "@tauri-apps/api/fs";
+  import { isPermissionGranted } from '@tauri-apps/api/notification';
+  import { info, error, attachConsole } from "tauri-plugin-log-api";
+  import { invoke } from "@tauri-apps/api";
+  import { CheckCircle2, CircleDashed} from 'lucide-svelte';
+  import { Input } from "$lib/components/ui/input";
+  import { Button } from "$lib/components/ui/button";
+  import { StoreManager } from "$lib/storeManager";
 
-  let count = 5;
+  const detach = async () => {
+    await attachConsole();
+  }
   let downloading = false;
   let downloadSuccess = false;
-  let intervalId: number;
+  let notificationGranted = false;
+  let screenRecordGranted = false;
+  let audioRecordGranted = false;
+  let apiToken = '';
+  let apiTokenValid = false;
+  let validationAttempted = false;
+  $: tokenInputClass = (apiTokenValid || !validationAttempted) ? '' : 'border-red-400';
 
-  export async function downloadModelFile(url: string, filename: string) {
-    const appDataDirPath = await appDataDir();
-    const path = await resolve(appDataDirPath, filename);
+  const storeManager = new StoreManager('.settings.dat');
 
-    const fileExists = await exists(path);
+async function checkApiTokenValidity() {
+  try {
+    let returnedValidity: boolean = await invoke('check_api_key_validity', { apiKey: apiToken });
+    if (returnedValidity) {
+      await info('API token is valid');
+      await storeManager.set('api_token', apiToken);
+      await info('API token saved to .settings.dat')
+      validationAttempted = true;
+      apiTokenValid = true;
+    } else {
+      await error('API token is invalid');
+      validationAttempted = true;
+      apiTokenValid = false;
+    }
+  } catch (e) {
+    await error('Failed to check API token validity: ' + e);
+    apiTokenValid = false;
+  }
+}
+  async function downloadModelFile(url: string, filename: string) {
+  const appDataDirPath = await appDataDir();
+  // check that this dir exists, if not, create it
+  const dirExists = await exists(appDataDirPath);
+  if (!dirExists) {
+    await info('Creating app data directory at ' + appDataDirPath);
+    await createDir(appDataDirPath);
+  }
+  const path = await resolve(appDataDirPath, filename);
 
-    if (!fileExists) {
-      await download(url, path);
+  const fileExists = await exists(path);
+
+  if (!fileExists) {
+    await info('Downloading file from ' + url + ' to ' + path);
+    await download(url, path);
+    await info('Download complete');
+    return true;
+  } else {
+    await info('File already exists, skipping download');
+    return true;
+  }
+}
+
+async function checkNotificationPermission(): Promise<boolean> {
+  let granted = await isPermissionGranted();
+  if (!granted) {
+    await info('No notification permissions yet, requesting permissions now');
+    let result = await Notification.requestPermission();
+    if (result === 'granted') {
+      await info('Notification permissions granted');
       return true;
     } else {
+      await error('Notification permissions denied');
       return false;
     }
+  } else {
+    await info('Notification permissions already granted');
+    return true;
+  }
+}
+
+async function checkScreenRecordingPermission(): Promise<boolean> {
+  let granted = await invoke('request_screen_recording_permissions');
+  if (granted) {
+    await info('Screen recording permissions granted');
+    return true;
+  } else {
+    await error('Screen recording permissions denied');
+    return false;
+  }
+}
+
+async function checkAudioRecordingPermission(): Promise<boolean> {
+  let granted = await invoke('request_mic_permissions');
+  if (granted) {
+    await info('Audio recording permissions granted');
+    return true;
+  } else {
+    await error('Audio recording permissions denied');
+    return false;
+  }
+}
+
+async function initialize() {
+  // Start the asynchronous download task without waiting for it to finish
+  downloading = true;
+  const downloadTask = downloadModelFile(
+    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true',
+    'ggml-base.en.bin'
+  ).then(success => {
+    downloading = false;
+    downloadSuccess = success;
+    if (success) {
+      console.info('GGML Download successful');
+    }
+  }).catch(downloadError => {
+    error('GGML Download failed: ' + downloadError);
+    downloading = false;
+  });
+
+
+  try {
+    await delay(2000);
+    // Sequential permission checks with delay
+    notificationGranted = await checkNotificationPermission();
+    await delay(2000);
+    screenRecordGranted = await checkScreenRecordingPermission();
+    await delay(2000);
+    audioRecordGranted = await checkAudioRecordingPermission();
+  } catch (e) {
+    await error('Initialization failed: ' + e);
   }
 
+  await downloadTask;
 
-  onMount(() => {
-    downloading = true;
-    downloadModelFile(
-      'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true',
-      'ggml-base.en.bin'
-    ).then(() => {
-      downloading = false;
-      downloadSuccess = true;
-      setTimeout(() => appWindow.close(), 3000);
-    }).catch((error: Error) => {
-      console.error('Download failed:', error);
-      downloading = false;
-    });
+  // Check that all permissions are granted and the download is complete
+  if (notificationGranted && screenRecordGranted && audioRecordGranted && downloadSuccess) {
+    // wait until apiTokenValid is set to true, then close the window
+    while (!apiTokenValid) {
+      await delay(500);
+    }
+    await info("Successfully checked for permissions and downloaded file, closing the window.");
+    await delay(1000);
+    await appWindow.close();
+  }
+}
 
-    intervalId = setInterval(() => {
-      if (count > 0) {
-        count -= 1;
-      } else {
-        clearInterval(intervalId);
-      }
-    }, 1000);
-  });
+onMount(async () => {
+  await initialize();
+});
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 </script>
 
-<div class="flex flex-col items-center justify-center h-screen p-4 bg-gray-100">
-  <h1 class="text-4xl font-bold text-center mb-6">Welcome to Derby!</h1>
-  <p class="text-lg text-center mb-2">
-    {#if count > 0}
-      We will ask for screen recording permissions in: {count}
-    {/if}
-  </p>
-    {#if downloading}
-      <p class="text-lg text-center mb-2">Downloading your AI model...</p>
-<!--      <div class="progress-bar">-->
-<!--        <div class="progress" style="width: {progressBarWidth};"></div>-->
-<!--      </div>-->
-    {:else if downloadSuccess}
-      <div class="flex items-center justify-center space-x-2">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>Download successful!</span>
+<div class="flex flex-col items-center justify-center h-screen p-4 bg-gray-100 space-y-6">
+  <h1 class="text-4xl font-bold text-center">Welcome to Derby!</h1>
+  <h3>Checking for permissions...</h3>
+  <ul class="space-y-2">
+    <li class="flex items-center">
+      {#if notificationGranted}
+        <CheckCircle2/>
+      {:else}
+        <CircleDashed />
+      {/if}
+      <span class="ml-2">Notification permissions</span>
+    </li>
+    <li class="flex items-center">
+      {#if screenRecordGranted}
+        <CheckCircle2/>
+      {:else}
+        <CircleDashed />
+      {/if}
+      <span class="ml-2">Screen Recording permissions</span>
+    </li>
+    <li class="flex items-center">
+      {#if audioRecordGranted}
+        <CheckCircle2/>
+      {:else}
+        <CircleDashed />
+      {/if}
+      <span class="ml-2">Audio Recording permissions</span>
+    </li>
+    <li class="flex items-center">
+      {#if apiTokenValid}
+        <CheckCircle2/>
+      {:else}
+        <CircleDashed />
+      {/if}
+      <div class="ml-2 flex w-full max-w-sm items-center space-x-2">
+        <Input
+          id="token_input"
+          bind:value={apiToken}
+          on:keydown={(e) => (e.key === 'Enter' ? checkApiTokenValidity() : null)}
+          type="test"
+          class="{tokenInputClass} animated_validation"
+          placeholder="Enter your OpenAI API Token"
+        />
+        <Button class="bg-[#07323A] text-white hover:bg-[#0E5A65]" on:click={checkApiTokenValidity}>Test</Button>
       </div>
-    {/if}
+    </li>
+    <li class="flex items-center">
+      {#if downloadSuccess}
+        <CheckCircle2 />
+      {:else}
+        <CircleDashed id="spinning_downloading"  class="animate-spin duration-3000 ease-linear"/>
+      {/if}
+      <span class="ml-2">AI model downloaded</span>
+    </li>
+  </ul>
 </div>
+<style>
+  .animated_validation {
+      transition: background-color 1s ease;
+  }
+</style>
