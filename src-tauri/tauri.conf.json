@@ -19,7 +19,14 @@
       "all": false,
       "fs": {
         "all": true,
-        "scope": ["$APPDATA/*"]
+        "scope": [
+          "$APPDATA/**",
+          "$APPDATA/*",
+          "$APPDATA/",
+          "$APPLOG/**",
+          "$APPLOG/*",
+          "$APPLOG/"
+        ]
       },
       "path": {
         "all": true
