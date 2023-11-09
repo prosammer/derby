@@ -36,38 +36,61 @@ pub fn init_whisper_context(app_handle: &AppHandle) {
 }
 
 
-pub fn get_audio_recording(app_handle: AppHandle) -> Result<Vec<f32>, anyhow::Error> {
-    let (buffer, input_stream, config) = setup_audio().expect("Failed to setup audio");
+pub struct AudioRecordingBuilder {
+    pub audio_data: Arc<Mutex<Vec<f32>>>,
+    pub input_stream: Option<Stream>,
+    pub config: StreamConfig,
+    pub sample_format: cpal::SampleFormat,
+}
+
+pub struct AudioRecording {
+    pub audio_data: Vec<f32>,
+    pub config: StreamConfig,
+    pub sample_format: cpal::SampleFormat,
+}
+
+pub fn get_audio_recording(app_handle: AppHandle) -> Result<AudioRecording, Error> {
+    let mut audio_recording_builder = setup_audio().expect("Failed to setup audio");
 
     loop {
         let app_state = app_handle.state::<TranscriptionState>();
-        // Lock the mode to check its value
-        let current_mode = {
-            let mode_lock = app_state.mode.lock().unwrap();
-            (*mode_lock).clone() // Clone the current mode to avoid moving it
-        };
+        let mode_lock = app_state.mode.lock().unwrap();
 
         // Check if the mode is not Listening (which means recording should stop)
-        if current_mode != TranscriptionMode::Listening {
-            drop(current_mode);
-            input_stream.pause().expect("Failed to pause stream");
-            return Ok(buffer.lock().unwrap().clone());
-        }
-        // It's important to not hold the lock while sleeping to avoid deadlocks
-        drop(current_mode); // Explicitly drop the lock before sleeping
+        if *mode_lock != TranscriptionMode::Listening {
+            // Drop the stream so I can access the audio data
+            audio_recording_builder.input_stream = None;
+
+            let audio_data_result = Arc::try_unwrap(audio_recording_builder.audio_data);
+
+            let audio_data = match audio_data_result {
+                Ok(data) => data.into_inner().unwrap(),
+                Err(_) => panic!("Failed to get audio data"),
+            };
+
+            let audio_recording = AudioRecording {
+                audio_data,
+                config: audio_recording_builder.config,
+                sample_format: audio_recording_builder.sample_format,
+            };
+
+                return Ok(audio_recording);
+            }
         std::thread::sleep(std::time::Duration::from_millis(200)); // Sleep to prevent a busy-wait loop
     }
 }
 
-fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> {
+fn setup_audio() -> Result<AudioRecordingBuilder, Error> {
     let host = cpal::default_host();
     let input_device = host
         .default_input_device()
         .expect("failed to get default input device");
     info!("Using default input device: \"{}\"", input_device.name().unwrap());
-    let config = input_device
+    let supported_stream_config = input_device
         .default_input_config()
-        .expect("Failed to get default input config").config();
+        .expect("Failed to get default input config");
+
+    let config = supported_stream_config.config();
     info!("Default input config: {:?}", config);
 
 
@@ -76,10 +99,9 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     let buffer_clone = Arc::clone(&buffer);
 
 
-    let buffer_clone_for_closure = Arc::clone(&buffer_clone);
     // Setup microphone callback
     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
-        let mut buffer = buffer_clone_for_closure.lock().unwrap();
+        let mut buffer = buffer_clone.lock().unwrap();
         for &sample in data {
             buffer.push(sample);
         }
@@ -92,10 +114,17 @@ fn setup_audio() -> Result<(Arc<Mutex<Vec<f32>>>, Stream, StreamConfig), Error> 
     );
     let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None).unwrap();
     info!("Successfully built stream.");
-    Ok((buffer_clone, input_stream, config))
+
+    let audio_recording = AudioRecordingBuilder {
+        audio_data: buffer,
+        input_stream: Some(input_stream),
+        config,
+        sample_format: supported_stream_config.sample_format(),
+    };
+    Ok(audio_recording)
 }
 
-pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
+pub fn speech_to_text(audio_recording: AudioRecording, state: &mut WhisperState) -> String {
     let mut params = FullParams::new(SamplingStrategy::default());
     params.set_print_progress(false);
     params.set_print_special(false);
@@ -110,6 +139,8 @@ pub fn speech_to_text(samples: &[f32], state: &mut WhisperState) -> String {
 
     //params.set_no_speech_thold(0.3);
     //params.set_split_on_word(true);
+
+    let samples = audio_recording.audio_data;
 
     let audio = if samples.len() % 2 == 0 {
         samples.to_vec()
