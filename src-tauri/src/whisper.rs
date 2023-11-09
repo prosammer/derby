@@ -2,7 +2,7 @@ extern crate anyhow;
 extern crate cpal;
 extern crate ringbuf;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, HostTrait};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 use std::sync::{Arc, Mutex};
@@ -11,12 +11,54 @@ use cpal::{Stream, StreamConfig};
 use log::{error, info};
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Manager};
+use tauri::api::http::{ClientBuilder, HttpRequestBuilder, ResponseType};
 use tauri::api::path::app_data_dir;
 use crate::{TranscriptionMode, TranscriptionState};
+use std::result::Result as StdResult;
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_FILE_NAME: &str = "ggml-base.en.bin";
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
+
+#[tauri::command]
+pub async fn download_model_file(app_handle: AppHandle, url: String, filename: String) -> StdResult<String, bool> {
+    let app_data_dir = app_data_dir(&*app_handle.config());
+    let path = app_data_dir.unwrap().join(filename);
+
+
+    if path.exists() {
+        info!("Model file already exists at {}", path.to_str().unwrap());
+        Ok(path.to_str().unwrap().to_string())
+    } else {
+        info!("Downloading model file from {} to {}", url, path.to_str().unwrap());
+        let client = ClientBuilder::new()
+            .max_redirections(3)
+            .build()
+            .unwrap();
+        let request = HttpRequestBuilder::new("GET", &url)
+            .unwrap()
+            .response_type(ResponseType::Binary);
+
+        let response = client.send(request).await;
+        match response {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let bytes = response.bytes().await.unwrap();
+                    tokio::fs::write(&path, bytes.data).await.unwrap();
+                } else {
+                    error!("Response status was: {}", response.status());
+                    error!("Response was: {:?}", response);
+                    return Err(false);
+                }
+            }
+            Err(e) => {
+                error!("Error downloading model file: {}", e);
+                return Err(false);
+            }
+        };
+        Ok(path.to_str().unwrap().to_string())
+    }
+}
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
     let config = app_handle.config();

@@ -24,7 +24,7 @@ use crate::stores::{get_from_store, set_in_store};
 use crate::gpt::check_api_key_validity;
 use crate::voice_chat::user_speech_to_gpt_response;
 use crate::screenshot::request_screen_recording_permissions;
-use crate::whisper::request_mic_permissions;
+use crate::whisper::{request_mic_permissions, download_model_file};
 
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
 const APP_ICON_LISTENING: &str = "resources/assets/sigma_master_green_512.png";
@@ -136,7 +136,7 @@ fn main() {
             .level_for("tao", LevelFilter::Warn)
             .with_colors(ColoredLevelConfig::default())
             .build())
-        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions, request_mic_permissions, check_api_key_validity])
+        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions, request_mic_permissions, check_api_key_validity, download_model_file])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {

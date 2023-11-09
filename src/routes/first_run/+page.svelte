@@ -1,9 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { appDataDir, resolve } from "@tauri-apps/api/path";
-  import { download } from "tauri-plugin-upload-api";
   import { appWindow } from "@tauri-apps/api/window";
-  import { createDir, exists } from "@tauri-apps/api/fs";
   import { isPermissionGranted } from '@tauri-apps/api/notification';
   import { info, error, attachConsole } from "tauri-plugin-log-api";
   import { invoke } from "@tauri-apps/api";
@@ -44,28 +41,6 @@ async function checkApiTokenValidity() {
   } catch (e) {
     await error('Failed to check API token validity: ' + e);
     apiTokenValid = false;
-  }
-}
-  async function downloadModelFile(url: string, filename: string) {
-  const appDataDirPath = await appDataDir();
-  // check that this dir exists, if not, create it
-  const dirExists = await exists(appDataDirPath);
-  if (!dirExists) {
-    await info('Creating app data directory at ' + appDataDirPath);
-    await createDir(appDataDirPath);
-  }
-  const path = await resolve(appDataDirPath, filename);
-
-  const fileExists = await exists(path);
-
-  if (!fileExists) {
-    await info('Downloading file from ' + url + ' to ' + path);
-    await download(url, path);
-    await info('Download complete');
-    return true;
-  } else {
-    await info('File already exists, skipping download');
-    return true;
   }
 }
 
@@ -112,19 +87,22 @@ async function checkAudioRecordingPermission(): Promise<boolean> {
 async function initialize() {
   // Start the asynchronous download task without waiting for it to finish
   downloading = true;
-  const downloadTask = downloadModelFile(
-    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true',
-    'ggml-base.en.bin'
-  ).then(success => {
-    downloading = false;
-    downloadSuccess = success;
-    if (success) {
-      console.info('GGML Download successful');
-    }
-  }).catch(downloadError => {
-    error('GGML Download failed: ' + downloadError);
-    downloading = false;
-  });
+
+  let downloadTask = invoke('download_model_file', {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true',
+    filename: 'ggml-base.en.bin',
+  })
+    .then(success => {
+      downloading = false;
+      downloadSuccess = true;
+      if (success) {
+        console.info('GGML Download successful');
+      }
+    })
+    .catch(downloadError => {
+      error('GGML Download failed: ' + downloadError);
+      downloading = false;
+    });
 
 
   try {
