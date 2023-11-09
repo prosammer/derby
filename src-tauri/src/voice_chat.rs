@@ -1,12 +1,14 @@
 use std::thread::spawn;
+use anyhow::Error;
 use async_openai::types::Role;
+use cpal::SampleRate;
 use log::info;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{ resample_audio};
+use crate::audio_utils::{_write_to_wav, resample_audio, TARGET_SAMPLE_RATE};
 use crate::gpt::{GptClient, messages_setup};
 use crate::screenshot::{screenshot};
-use crate::whisper::WHISPER_CONTEXT;
+use crate::whisper::{AudioRecording, WHISPER_CONTEXT};
 
 pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
     // record audio in this thread until the hotkey is pressed again
@@ -24,13 +26,17 @@ pub fn user_speech_to_gpt_response(app_handle: AppHandle) {
     let mut state = ctx.create_state().expect("failed to create key");
 
     info!("Initialization complete, starting audio thread");
-    // audio_res is f32, 48khz, float data from CPAL
-    let audio_res: anyhow::Result<Vec<f32>>= whisper::get_audio_recording(app_handle);
+    let audio_res: anyhow::Result<AudioRecording, Error>= whisper::get_audio_recording(app_handle);
 
-    let audio_vec = audio_res.unwrap();
-    let resampled_audio = resample_audio(&audio_vec, 48000, 16000);
+    let mut audio_recording = audio_res.unwrap();
+    if audio_recording.config.sample_rate != SampleRate(TARGET_SAMPLE_RATE as u32) {
+        audio_recording = resample_audio(audio_recording);
+    } else {
+        info!("Target sample rate is: {}. Audio sample rate is already {}. Not resampling", TARGET_SAMPLE_RATE, audio_recording.config.sample_rate.0);
+    }
 
-    let speech_text = whisper::speech_to_text(&resampled_audio, &mut state);
+
+    let speech_text = whisper::speech_to_text(audio_recording, &mut state);
     info!("Speech to text: {}", speech_text);
 
     let screenshot_path = screenshot_handle.join().unwrap();

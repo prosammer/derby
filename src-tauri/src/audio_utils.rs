@@ -3,23 +3,26 @@ use rodio::{Decoder, OutputStream, Sink};
 use bytes::Bytes;
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
+use log::info;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
+use crate::whisper::AudioRecording;
 
-fn clamp(value: f32, min: f32, max: f32) -> f32 {
+pub const TARGET_SAMPLE_RATE: usize = 16000;
+fn _clamp(value: f32, min: f32, max: f32) -> f32 {
     value.min(max).max(min)
 }
 
-pub fn make_audio_louder(audio_samples: &[f32], gain: f32) -> Vec<f32> {
+pub fn _make_audio_louder(audio_samples: &[f32], gain: f32) -> Vec<f32> {
     audio_samples
         .iter()
         .map(|sample| {
             let louder_sample = sample * gain;
-            clamp(louder_sample, -1.0, 1.0)
+            _clamp(louder_sample, -1.0, 1.0)
         })
         .collect()
 }
 
-fn high_pass_filter(data: &mut Vec<f32>, cutoff: f32, sample_rate: f32) {
+fn _high_pass_filter(data: &mut Vec<f32>, cutoff: f32, sample_rate: f32) {
     const M_PI: f32 = std::f32::consts::PI;
 
     let rc = 1.0 / (2.0 * M_PI * cutoff);
@@ -34,56 +37,7 @@ fn high_pass_filter(data: &mut Vec<f32>, cutoff: f32, sample_rate: f32) {
     }
 }
 
-pub fn vad_simple(
-    mut pcmf32: &mut Vec<f32>,
-    sample_rate: usize,
-    last_ms: usize
-) -> bool {
-    let vad_thold = 0.6;
-    let freq_thold = 100.0;
-
-    let verbose = false;
-    let n_samples = pcmf32.len();
-    let n_samples_last = (sample_rate * last_ms) / 1000;
-
-    if n_samples_last >= n_samples {
-        // not enough samples - assume no speech
-        return false;
-    }
-
-    if freq_thold > 0.0 {
-        high_pass_filter(&mut pcmf32, freq_thold, sample_rate as f32);
-    }
-
-    let mut energy_all = 0.0f32;
-    let mut energy_last = 0.0f32;
-
-    for i in 0..n_samples {
-        energy_all += pcmf32[i].clone().abs();
-
-        if i >= n_samples - n_samples_last {
-            energy_last += pcmf32[i].abs();
-        }
-    }
-
-    energy_all /= n_samples as f32;
-    energy_last /= n_samples_last as f32;
-
-    if verbose {
-        eprintln!(
-            "vad_simple: energy_all: {}, energy_last: {}, vad_thold: {}, freq_thold: {}",
-            energy_all, energy_last, vad_thold, freq_thold
-        );
-    }
-
-    if energy_last > vad_thold * energy_all {
-        return false;
-    }
-
-    true
-}
-
-pub fn convert_stereo_to_mono_audio(samples: Vec<f32>) -> Result<Vec<f32>, &'static str> {
+pub fn _convert_stereo_to_mono_audio(samples: Vec<f32>) -> Result<Vec<f32>, &'static str> {
     let mono_samples: Vec<f32> = samples
         .chunks_exact(2)
         .map(|x| (x[0] + x[1]) / 2.0)
@@ -98,7 +52,7 @@ pub fn convert_stereo_to_mono_audio(samples: Vec<f32>) -> Result<Vec<f32>, &'sta
     Ok(mono_samples)
 }
 
-pub fn play_audio_bytes(audio_bytes: Bytes) {
+pub fn _play_audio_bytes(audio_bytes: Bytes) {
     let cursor = Cursor::new(audio_bytes);
 
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -110,7 +64,7 @@ pub fn play_audio_bytes(audio_bytes: Bytes) {
     sink.sleep_until_end();
 }
 
-pub fn play_audio_f32_vec(data: Vec<f32>, sample_rate: u32) {
+pub fn _play_audio_f32_vec(data: Vec<f32>, sample_rate: u32) {
     println!("Playing audio");
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Sink::try_new(&stream_handle).unwrap();
@@ -121,7 +75,9 @@ pub fn play_audio_f32_vec(data: Vec<f32>, sample_rate: u32) {
     sink.sleep_until_end();
 }
 
-pub fn resample_audio(audio_vec: &[f32], original_sample_rate: usize, target_sample_rate: usize) -> Vec<f32> {
+pub fn resample_audio(mut audio_recording: AudioRecording) -> AudioRecording {
+    info!("Resampling audio from {} to {}", audio_recording.config.sample_rate.0, TARGET_SAMPLE_RATE);
+
     let sinc_len = 256;
     let f_cutoff = 0.95;
     let params = SincInterpolationParameters {
@@ -133,20 +89,22 @@ pub fn resample_audio(audio_vec: &[f32], original_sample_rate: usize, target_sam
     };
 
     let mut resampler = SincFixedIn::<f32>::new(
-        target_sample_rate as f64 / original_sample_rate as f64,
+        TARGET_SAMPLE_RATE as f64 / audio_recording.config.sample_rate.0 as f64,
         1.0,
         params,
-        audio_vec.len(),
+        audio_recording.audio_data.len(),
         1,
     ).expect("Failed to create resampler");
 
-    let audio_data = vec![audio_vec.to_vec()];
+    let audio_data = vec![audio_recording.audio_data.to_vec()];
 
     let audio_vec_resampled = resampler.process(&audio_data, None).unwrap();
-    audio_vec_resampled.into_iter().flatten().collect()
+    audio_recording.audio_data = audio_vec_resampled.into_iter().flatten().collect();
+    audio_recording.config.sample_rate.0 = TARGET_SAMPLE_RATE as u32;
+    audio_recording
 }
 
-pub fn play_audio_from_wav(path: PathBuf) {
+pub fn _play_audio_from_wav(path: PathBuf) {
     if !path.exists() || !path.is_file() {
         println!("This was the path given: {:?}", path);
         println!("File does not exist or is not a file");
@@ -156,30 +114,30 @@ pub fn play_audio_from_wav(path: PathBuf) {
     let mut file = File::open(path).unwrap();
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
-    play_audio_bytes(Bytes::from(buffer));
+    _play_audio_bytes(Bytes::from(buffer));
 }
 
-pub fn write_to_wav(audio_samples: &[f32], filename: &str) -> Result<(), hound::Error> {
-    let target_sample_rate = 16000;
+pub fn _write_to_wav(audio_samples: &AudioRecording, filename: &str) -> Result<(), hound::Error> {
 
+    info!("Writing audio to {}", filename);
     let spec = hound::WavSpec {
         channels: 1,
-        sample_rate: target_sample_rate,
+        sample_rate: TARGET_SAMPLE_RATE as u32,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
 
     let mut writer = hound::WavWriter::create(filename, spec)?;
 
-    for &sample in audio_samples {
+    for &sample in audio_samples.audio_data.iter() {
         writer.write_sample((sample * i16::MAX as f32) as i16)?;
     }
-
     writer.finalize()?;
+    info!("Finished writing audio to {}", filename);
     Ok(())
 }
 
-pub fn read_from_wav(filename: &str) {
+pub fn _read_from_wav(filename: &str) {
     let mut reader = hound::WavReader::open(filename).expect("failed to open file");
     #[allow(unused_variables)]
         let hound::WavSpec {
@@ -209,21 +167,5 @@ pub fn read_from_wav(filename: &str) {
 
     if sample_rate != 16000 {
         panic!("sample rate must be 16KHz");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs::File;
-    use std::io::Read;
-    use bytes::Bytes;
-    use crate::audio_utils::play_audio_bytes;
-
-    #[test]
-    fn test_play_audio() {
-        let mut file = File::open("../assets/test.wav").unwrap();
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).unwrap();
-        play_audio_bytes(Bytes::from(buffer));
     }
 }

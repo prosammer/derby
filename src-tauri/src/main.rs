@@ -115,7 +115,6 @@ fn main() {
                 create_first_run_window(&app_handle);
             }
 
-            let app_handle_clone = app_handle.clone();
             app_handle.global_shortcut_manager().register("F5", move || {
                 change_transcription_state(&app_handle);
             }).unwrap();
