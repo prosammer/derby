@@ -219,6 +219,7 @@ fn create_settings_window(app_handle: &AppHandle) -> tauri::Window {
         "settings_window",
         WindowUrl::App("settings".into())
     )
+        .title("Settings")
         .build()
         .expect("Failed to create settings_window");
 
@@ -231,6 +232,7 @@ fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
         "first_run_window",
         WindowUrl::App("first_run".into())
     )
+        .title("Welcome to Derby")
         .build()
         .expect("Failed to create settings_window");
 
