@@ -5,7 +5,7 @@ use cpal::SampleRate;
 use log::info;
 use tauri::{AppHandle};
 use crate::{gpt, whisper};
-use crate::audio_utils::{_write_to_wav, resample_audio, TARGET_SAMPLE_RATE};
+use crate::audio_utils::{resample_audio, TARGET_SAMPLE_RATE};
 use crate::gpt::{GptClient, messages_setup};
 use crate::screenshot::{screenshot};
 use crate::whisper::{AudioRecording, WHISPER_CONTEXT};

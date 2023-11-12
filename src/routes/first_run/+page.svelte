@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
   import { appWindow } from "@tauri-apps/api/window";
   import { isPermissionGranted } from '@tauri-apps/api/notification';
   import { info, error, attachConsole } from "tauri-plugin-log-api";
@@ -24,6 +24,17 @@
 
   const storeManager = new StoreManager('.settings.dat');
 
+async function handleModelDownload() {
+  invoke('handle_model_file').then(async () => {
+    await info('Model download successful');
+    downloadSuccess = true;
+    downloading = false;
+  }).catch(async (e) => {
+    await error('Model download failed: ' + e);
+    downloadSuccess = false;
+    downloading = false;
+  })
+}
 async function checkApiTokenValidity() {
   try {
     let returnedValidity: boolean = await invoke('check_api_key_validity', { apiKey: apiToken });
@@ -85,24 +96,8 @@ async function checkAudioRecordingPermission(): Promise<boolean> {
 }
 
 async function initialize() {
-  // Start the asynchronous download task without waiting for it to finish
-  downloading = true;
-
-  let downloadTask = invoke('download_model_file', {
-    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true',
-    filename: 'ggml-base.en.bin',
-  })
-    .then(success => {
-      downloading = false;
-      downloadSuccess = true;
-      if (success) {
-        console.info('GGML Download successful');
-      }
-    })
-    .catch(downloadError => {
-      error('GGML Download failed: ' + downloadError);
-      downloading = false;
-    });
+  downloading = true
+  await handleModelDownload();
 
 
   try {
@@ -117,7 +112,6 @@ async function initialize() {
     await error('Initialization failed: ' + e);
   }
 
-  await downloadTask;
 
   // Check that all permissions are granted and the download is complete
   if (notificationGranted && screenRecordGranted && audioRecordGranted && downloadSuccess) {

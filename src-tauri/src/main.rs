@@ -6,7 +6,6 @@ mod audio_utils;
 mod voice_chat;
 mod gpt;
 mod screenshot;
-mod text_to_speech;
 
 use std::env;
 use std::sync::{ Mutex};
@@ -19,15 +18,30 @@ use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::LogTarget;
 use tauri_plugin_positioner::{Position, WindowExt};
+use tokio::runtime::Runtime;
 
 use crate::stores::{get_from_store, set_in_store};
 use crate::gpt::check_api_key_validity;
 use crate::voice_chat::user_speech_to_gpt_response;
 use crate::screenshot::request_screen_recording_permissions;
-use crate::whisper::{request_mic_permissions, download_model_file};
+use crate::whisper::{handle_model_file, request_mic_permissions};
 
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
 const APP_ICON_LISTENING: &str = "resources/assets/sigma_master_green_512.png";
+
+macro_rules! notify {
+    ($title:expr, $body:expr) => {{
+        use tauri::api::notification::Notification;
+        let app = tauri::Builder::default()
+            .build(tauri::generate_context!("test/fixture/src-tauri/tauri.conf.json"))
+            .expect("error while building tauri application");
+
+        Notification::new(&app.config().tauri.bundle.identifier)
+            .title($title)
+            .body($body)
+            .show();
+    }};
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TranscriptionMode {
@@ -107,12 +121,16 @@ fn main() {
     let mut app = tauri::Builder::default()
         .setup( |app| {
             let app_handle = app.handle();
+            let app_handle_clone = app_handle.clone();
             app_handle.manage(TranscriptionState::new());
 
             // let _window = create_transcription_window(&app_handle);
             let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
             if get_from_store(&app_handle, "first_run").is_none() || is_testing_env {
                 create_first_run_window(&app_handle);
+            } else {
+                let rt = Runtime::new().unwrap();
+                rt.block_on(handle_model_file(app_handle_clone)).expect("Failed to handle model file");
             }
 
             app_handle.global_shortcut_manager().register("F5", move || {
@@ -136,7 +154,7 @@ fn main() {
             .level_for("tao", LevelFilter::Warn)
             .with_colors(ColoredLevelConfig::default())
             .build())
-        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions, request_mic_permissions, check_api_key_validity, download_model_file])
+        .invoke_handler(tauri::generate_handler![request_screen_recording_permissions, request_mic_permissions, check_api_key_validity, handle_model_file])
         .system_tray(tray)
         .on_system_tray_event(|app_handle, event| {
             match event {
@@ -241,7 +259,7 @@ fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
 }
 
 fn tray_setup() -> SystemTray {
-    let settings = CustomMenuItem::new("settings".to_string(), "Settings");
+    // let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit").accelerator("Cmd+Q");
     let tray_menu = SystemTrayMenu::new()
         // .add_item(settings)

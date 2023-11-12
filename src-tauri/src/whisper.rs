@@ -2,62 +2,112 @@ extern crate anyhow;
 extern crate cpal;
 extern crate ringbuf;
 
+use std::fs;
+use std::fs::File;
+use std::io::{Read};
+use std::path::{PathBuf};
 use cpal::traits::{DeviceTrait, HostTrait};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperState};
 
 use std::sync::{Arc, Mutex};
-use anyhow::{Result, Error};
+use anyhow::{Result, Error, anyhow};
 use cpal::{Stream, StreamConfig};
 use log::{error, info};
 use once_cell::sync::OnceCell;
+use reqwest::{StatusCode};
 use tauri::{AppHandle, Manager};
-use tauri::api::http::{ClientBuilder, HttpRequestBuilder, ResponseType};
 use tauri::api::path::app_data_dir;
 use crate::{TranscriptionMode, TranscriptionState};
+use sha1::{Sha1, Digest};
 use std::result::Result as StdResult;
 
 pub const LATENCY_MS: f32 = 30000.0;
 pub const WHISPER_FILE_NAME: &str = "ggml-base.en.bin";
+pub const WHISPER_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
+pub const WHISPER_FILE_SIZE: u64 = 147964211;
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
+
+#[derive(Clone, serde::Serialize)]
+struct EventPayload {
+    message: String,
+}
+
 #[tauri::command]
-pub async fn download_model_file(app_handle: AppHandle, url: String, filename: String) -> StdResult<String, bool> {
-    let app_data_dir = app_data_dir(&*app_handle.config());
-    let path = app_data_dir.unwrap().join(filename);
+pub async fn handle_model_file(app_handle: AppHandle) -> StdResult<(), ()> {
+    let app_data_dir = app_data_dir(&*app_handle.config()).expect("Failed to get app data dir");
+    let path = app_data_dir.join(WHISPER_FILE_NAME);
+    let path_str = path.to_str().unwrap();
 
+    let size_matches = |path: &PathBuf, size: u64| -> std::io::Result<bool> {
+        let metadata = fs::metadata(path)?;
+        Ok(metadata.len() == size)
+    };
 
-    if path.exists() {
-        info!("Model file already exists at {}", path.to_str().unwrap());
-        Ok(path.to_str().unwrap().to_string())
+    let needs_download = if !path.exists() {
+        info!("Model file does not exist at {}", path_str);
+        true
     } else {
-        info!("Downloading model file from {} to {}", url, path.to_str().unwrap());
-        let client = ClientBuilder::new()
-            .max_redirections(3)
-            .build()
-            .unwrap();
-        let request = HttpRequestBuilder::new("GET", &url)
-            .unwrap()
-            .response_type(ResponseType::Binary);
-
-        let response = client.send(request).await;
-        match response {
-            Ok(response) => {
-                if response.status().is_success() {
-                    let bytes = response.bytes().await.unwrap();
-                    tokio::fs::write(&path, bytes.data).await.unwrap();
-                } else {
-                    error!("Response status was: {}", response.status());
-                    error!("Response was: {:?}", response);
-                    return Err(false);
-                }
+        match size_matches(&path, WHISPER_FILE_SIZE) {
+            Ok(true) => {
+                info!("Model file exists and size matches at {}", path_str);
+                false
+            }
+            _ => {
+                info!("Model file exists at {}, but size does not match", path_str);
+                true
+            }
+        }
+    };
+    if needs_download {
+        match download_model(&path, WHISPER_URL).await {
+            Ok(_) => {
+                info!("Model file downloaded successfully");
             }
             Err(e) => {
-                error!("Error downloading model file: {}", e);
-                return Err(false);
+                error!("Failed to download model file: {}", e);
+                return Err(());
             }
-        };
-        Ok(path.to_str().unwrap().to_string())
+        }
     }
+    Ok(())
+}
+
+
+pub fn _hash_matches(path: &PathBuf, sha: &str) -> Result<bool> {
+    let mut hasher = Sha1::new();
+    let mut file = File::open(&path)?;
+    let mut buffer = [0; 8192];
+
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+    let result = hasher.finalize();
+    let result_str = format!("{:x}", result);
+    Ok(result_str == sha)
+}
+
+async fn download_model(path: &PathBuf, url: &str) -> Result<()> {
+    info!("Downloading model file from {} to {:?}",url,  path);
+    let response = reqwest::get(url).await?;
+
+    match response.status() {
+        StatusCode::OK => {
+            info!("Response successful");
+            let bytes = response.bytes().await?;
+            tokio::fs::write(&path, bytes).await?;
+        }
+        _ => {
+            error!("Response status was: {}", response.status());
+            error!("Response was: {:?}", response);
+            return Err(anyhow!("Response status was: {}", response.status()));
+        }
+    }
+    Ok(())
 }
 
 pub fn init_whisper_context(app_handle: &AppHandle) {
@@ -217,7 +267,7 @@ pub fn request_mic_permissions() -> bool {
     use objc::runtime::{Class, Object};
     use objc::{msg_send, sel, sel_impl};
 
-    let (tx, mut rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
 
     unsafe {
         let av_audio_session_class = Class::get("AVAudioSession").unwrap();
@@ -235,4 +285,84 @@ pub fn request_mic_permissions() -> bool {
     // Wait for the callback to be called
     let response = rx.recv().unwrap();
     return response == ();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn test_hash_matches() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "Hello, world!").unwrap();
+
+        let expected_hash = "09fac8dbfd27bd9b4d23a00eb648aa751789536d";
+        assert!(hash_matches(&file_path, expected_hash).is_ok());
+        assert_eq!(hash_matches(&file_path, expected_hash).unwrap(), true);
+    }
+
+    #[test]
+    fn test_hash_matches_wrong_hash() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "Hello, world!").unwrap();
+
+        let wrong_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        assert!(hash_matches(&file_path, wrong_hash).is_ok());
+        assert_eq!(hash_matches(&file_path, wrong_hash).unwrap(), false);
+    }
+
+    #[test]
+    fn test_hash_matches_invalid_path() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+
+        assert!(hash_matches(&file_path, "any_hash").is_err());
+    }
+    #[test]
+    fn test_download_model() {
+        let rt = Runtime::new().unwrap();
+        let path = PathBuf::from("test-5mb.bin");
+        let url = "https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin".to_string();
+
+        // Run the async function in a synchronous test
+        rt.block_on(download_model(&path, &url)).unwrap();
+
+        // Check if the file was downloaded correctly
+        let mut file = File::open(&path).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+
+        assert!(contents.len() > 0);
+
+        // Clean up the test file
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_download_actual_model() {
+        let rt = Runtime::new().unwrap();
+        let path = PathBuf::from("test-5mb.bin");
+        let url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true".to_string();
+
+        // Run the async function in a synchronous test
+        rt.block_on(download_model(&path, &url)).unwrap();
+
+        // Check if the file was downloaded correctly
+        let mut file = File::open(&path).unwrap();
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).unwrap();
+
+        assert!(contents.len() > 0);
+
+        // Clean up the test file
+        std::fs::remove_file(path).unwrap();
+    }
 }

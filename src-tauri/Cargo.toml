@@ -17,7 +17,7 @@ tauri-build = { version = "1.5.0", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.5.2", features = [ "notification-all", "path-all", "window-all", "global-shortcut-all", "macos-private-api", "fs-all", "system-tray", "icon-png"] }
+tauri = { version = "1.5.2", features = [ "http-all", "notification-all", "path-all", "window-all", "global-shortcut-all", "macos-private-api", "fs-all", "system-tray", "icon-png"] }
 dotenv = "0.15.0"
 async-openai = "0.15"
 tokio = "1.29.1"
@@ -53,6 +53,8 @@ futures-util = "0.3.29"
 log = "0.4.20"
 cocoa = "0.25.0"
 block = "0.1.6"
+sha1 = "0.10.6"
+tempfile = "3.8.1"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

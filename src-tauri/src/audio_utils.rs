@@ -149,7 +149,7 @@ pub fn _read_from_wav(filename: &str) {
 
     println!("Reader Spec: {:?}", reader.spec());
     // Convert the audio to floating point samples.
-    let mut audio = whisper_rs::convert_integer_to_float_audio(
+    let audio = whisper_rs::convert_integer_to_float_audio(
         &reader
             .samples::<i16>()
             .map(|s| s.expect("invalid sample"))
@@ -160,7 +160,7 @@ pub fn _read_from_wav(filename: &str) {
     // These utilities are provided for convenience, but can be replaced with custom conversion logic.
     // SIMD variants of these functions are also available on nightly Rust (see the docs).
     if channels == 2 {
-        audio = whisper_rs::convert_stereo_to_mono_audio(&audio).unwrap();
+        whisper_rs::convert_stereo_to_mono_audio(&audio).unwrap();
     } else if channels != 1 {
         panic!(">2 channels unsupported");
     }
