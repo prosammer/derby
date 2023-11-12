@@ -1,7 +1,7 @@
 use std::env;
 use std::time::Duration;
 use anyhow::{anyhow, Result};
-use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role};
+use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, Role};
 use base64::encode;
 use reqwest::{Client, header};
 use serde_json::{json, Value};
@@ -9,7 +9,6 @@ use tauri::{AppHandle, Manager};
 use futures_util::StreamExt;
 use log::{error, info};
 use tokio::{fs, time};
-use tokio::io::{AsyncReadExt};
 use crate::stores::get_from_store;
 
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
@@ -54,7 +53,7 @@ impl GptClient {
         }
     }
 
-    pub async fn get_gpt_response(&self, mut messages: Vec<ChatCompletionRequestMessage>, image_path: String, app_handle: AppHandle) -> Result<()> {
+    pub async fn get_gpt_response(&self, messages: Vec<ChatCompletionRequestMessage>, image_path: String, app_handle: AppHandle) -> Result<()> {
         if self.is_testing_env() {
             self.emit_test_events().await?;
             return Ok(());

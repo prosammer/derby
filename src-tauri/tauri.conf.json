@@ -28,6 +28,11 @@
           "$APPLOG/"
         ]
       },
+      "http": {
+        "all": true,
+        "request": true,
+        "scope": ["https://huggingface.co/ggerganov/**"]
+      },
       "path": {
         "all": true
       },
