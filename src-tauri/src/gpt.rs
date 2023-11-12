@@ -185,9 +185,12 @@ pub fn create_chat_completion_request_msg(content: String, role: Role) -> ChatCo
 
 
 pub fn messages_setup() -> Vec<ChatCompletionRequestMessage> {
-    let system_message_content = "This is an AI macos app where the user asks for the AI to write some text via speech-to-text, and then the text is pasted into the field that they currently have selected.\
-     The user uses speech-to-text to communicate, so some of their messages may be incorrect - make assumptions based on this.\
-     The user will be unable to respond to you after you send a message, so do not ask any questions or ask for clarification.\
+    let system_message_content = "This is an AI macos app where the user questions/tasks the AI via speech-to-text.\
+    The app also takes a screenshot of the user's screen and sends it to the AI so that the AI can use it to answer the user's question.\
+    Don't refer to the 'screenshot' in your response, instead call it their 'screen' or 'desktop'.\
+    Sometimes the user might just say something that is not related to the screenshot. In this case, just ignore the screenshot and respond normally.\
+     Since the user uses speech-to-text to communicate, so some of their messages may be incorrect - make assumptions (on incorrect words etc.) based on this.\
+     In The user will be unable to respond to you after you send a message, so do not ask any questions or ask for clarification.\
       Ensure that your output is just the output they requested - do not ask any follow up questions or include any extra text.";
     let system_message = create_chat_completion_request_msg(system_message_content.to_string(), Role::System);
 
