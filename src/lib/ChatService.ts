@@ -31,14 +31,10 @@ export class ChatService {
   };
 
   private handleChunkReceived = (event: { payload: string; }) => {
-    if (typeof event.payload === 'string') {
-      const messageIndex = this.bubbleFeed.findIndex(message => message.id === this.currentMessageId - 1);
-      if (messageIndex !== -1) {
-        this.bubbleFeed[messageIndex].message += event.payload;
-        this.updateCallback([...this.bubbleFeed]);
-      }
-    } else {
-      console.error('Received non-string payload', event.payload);
+    const messageIndex = this.bubbleFeed.findIndex(message => message.id === this.currentMessageId - 1);
+    if (messageIndex !== -1) {
+      this.bubbleFeed[messageIndex].message += event.payload;
+      this.updateCallback([...this.bubbleFeed]);
     }
   };
 }
