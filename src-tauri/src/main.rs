@@ -8,10 +8,10 @@ mod gpt;
 mod screenshot;
 
 use std::env;
-use std::sync::{ Mutex};
+use std::sync::{Mutex};
 use std::thread::spawn;
 use dotenv::dotenv;
-use log::{info, LevelFilter};
+use log::{error, info, LevelFilter};
 use tauri::{ActivationPolicy, AppHandle, CustomMenuItem, GlobalShortcutManager, Icon, Manager, SystemTray, SystemTrayMenu, SystemTrayMenuItem, WindowBuilder, WindowUrl};
 use tauri::TitleBarStyle::{Transparent};
 use tauri_plugin_autostart::MacosLauncher;
@@ -29,20 +29,18 @@ use crate::whisper::{handle_model_file, request_mic_permissions};
 const APP_ICON_DEFAULT: &str = "resources/assets/sigma_master_512.png";
 const APP_ICON_LISTENING: &str = "resources/assets/sigma_master_green_512.png";
 
+#[macro_export]
 macro_rules! notify {
-    ($title:expr, $body:expr) => {{
-        use tauri::api::notification::Notification;
-        let app = tauri::Builder::default()
-            .build(tauri::generate_context!("test/fixture/src-tauri/tauri.conf.json"))
-            .expect("error while building tauri application");
-
-        Notification::new(&app.config().tauri.bundle.identifier)
+    ($title:expr, $body:expr, $bundle_id:expr) => {{
+        match tauri::api::notification::Notification::new($bundle_id)
             .title($title)
             .body($body)
-            .show();
+            .show() {
+                Ok(_) => info!("Notification shown"),
+                Err(e) => error!("Failed to show notification: {:?}", e),
+        }
     }};
 }
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TranscriptionMode {
     Inactive,
@@ -77,6 +75,10 @@ impl TranscriptionState {
             .resolve_resource(APP_ICON_DEFAULT)
             .expect("Failed to resolve icon resource path");
 
+        let window = app_handle.get_window("transcription_window");
+        if window.is_some() {
+            window.unwrap().close().unwrap();
+        }
         app_handle.tray_handle().set_icon_as_template(true).unwrap();
         app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
     }
@@ -90,8 +92,17 @@ impl TranscriptionState {
         app_handle.tray_handle().set_icon(Icon::File(resource_path)).unwrap();
 
         let app_handle_clone = app_handle.clone();
-        spawn(move || {
-            user_speech_to_gpt_response(app_handle_clone);
+        let _ = spawn(move || {
+            match user_speech_to_gpt_response(&app_handle_clone) {
+                Ok(_) => {
+                    info!("Successfully got response from GPT");
+                }
+                Err(e) => {
+                    notify!("Failed to get response from GPT", "Please try again", &app_handle_clone.config().tauri.bundle.identifier.clone());
+                    error!("Failed to get response from GPT: {:?}", e);
+                    let _ = &app_handle_clone.state::<TranscriptionState>().set_mode(TranscriptionMode::Inactive, &app_handle_clone);
+                }
+            }
         });
     }
 
@@ -250,6 +261,7 @@ fn create_first_run_window(app_handle: &AppHandle) -> tauri::Window {
         WindowUrl::App("first_run".into())
     )
         .title("Welcome to Derby")
+        .always_on_top(true)
         .build()
         .expect("Failed to create settings_window");
 

@@ -1,8 +1,9 @@
 use std::env;
+use std::path::PathBuf;
 use std::time::Duration;
 use anyhow::{anyhow, Result};
 use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs, Role};
-use base64::encode;
+use base64::{Engine as _, engine::{general_purpose}};
 use reqwest::{Client, header};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
@@ -53,7 +54,7 @@ impl GptClient {
         }
     }
 
-    pub async fn get_gpt_response(&self, messages: Vec<ChatCompletionRequestMessage>, image_path: String, app_handle: AppHandle) -> Result<()> {
+    pub async fn get_gpt_response(&self, messages: Vec<ChatCompletionRequestMessage>, image_path: PathBuf, app_handle: AppHandle) -> Result<()> {
         if self.is_testing_env() {
             self.emit_test_events().await?;
             return Ok(());
@@ -68,9 +69,10 @@ impl GptClient {
         Ok(())
     }
 
-    async fn encode_image(&self, image_path: String) -> Result<String> {
+    async fn encode_image(&self, image_path: PathBuf) -> Result<String> {
         let buffer = fs::read(&image_path).await?;
-        Ok(encode(&buffer))
+        let b64 = general_purpose::STANDARD.encode(&buffer);
+        Ok(b64)
     }
 
     fn prepare_messages_for_payload(&self, messages: Vec<ChatCompletionRequestMessage>, base64_string: &str) -> Vec<Value> {
@@ -260,7 +262,7 @@ impl JSONBufferParser {
 }
 
 fn extract_content_from_json(json_str: &str) -> Option<String> {
-    let value: serde_json::Result<serde_json::Value> = serde_json::from_str(json_str);
+    let value: serde_json::Result<Value> = serde_json::from_str(json_str);
 
     if let Ok(val) = value {
         if let Some(content) = val["choices"].get(0)

@@ -25,12 +25,6 @@ pub const WHISPER_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/reso
 pub const WHISPER_FILE_SIZE: u64 = 147964211;
 pub static WHISPER_CONTEXT: OnceCell<WhisperContext> = OnceCell::new();
 
-
-#[derive(Clone, serde::Serialize)]
-struct EventPayload {
-    message: String,
-}
-
 #[tauri::command]
 pub async fn handle_model_file(app_handle: AppHandle) -> StdResult<(), ()> {
     let app_data_dir = app_data_dir(&*app_handle.config()).expect("Failed to get app data dir");
@@ -121,7 +115,7 @@ pub struct AudioRecording {
     pub sample_format: cpal::SampleFormat,
 }
 
-pub fn get_audio_recording(app_handle: AppHandle) -> Result<AudioRecording, Error> {
+pub fn get_audio_recording(app_handle: &AppHandle) -> Result<AudioRecording, Error> {
     let mut audio_recording_builder = setup_audio().expect("Failed to setup audio");
 
     loop {
