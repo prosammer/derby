@@ -1,28 +1,19 @@
 use std::fs;
+use std::path::PathBuf;
 use screenshots::Screen;
-use tauri::api::path::app_data_dir;
-use tauri::AppHandle;
-
-const SCREENSHOT_FILE_NAME: &str = "derby_latest_screenshot.png";
-pub fn screenshot(app_handle: AppHandle) -> String {
-    let config = app_handle.config();
-    let app_data_dir_path = app_data_dir(&*config).expect("Failed to get app data dir");
-
-    let screenshot_path = app_data_dir_path.join(SCREENSHOT_FILE_NAME);
-    let screens = Screen::all().unwrap();
+use anyhow::{Result};
+pub fn screenshot(screenshot_path: PathBuf) -> Result<PathBuf> {
+    let screens = Screen::all()?;
     let screen = screens[0];
     println!("capturer {screen:?}");
-    let image = screen.capture().unwrap();
-    image
-        .save(screenshot_path.clone())
-        .unwrap();
-
-    let metadata = fs::metadata(screenshot_path.clone()).unwrap();
+    let image = screen.capture()?;
+    image.save(screenshot_path.clone())?;
+    let metadata = fs::metadata(screenshot_path.clone())?;
     // Get the file size from the metadata
     let file_size = metadata.len();
     println!("File size is: {} bytes", file_size);
 
-    return screenshot_path.to_str().unwrap().into();
+    return Ok(screenshot_path)
 }
 
 #[tauri::command]
@@ -30,4 +21,19 @@ pub fn request_screen_recording_permissions() -> bool {
     let screens = Screen::all().unwrap();
     let first_screen = screens.first().unwrap();
     return first_screen.capture().is_ok()
+}
+
+// tests for screenshot fn
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_screenshot() {
+        let screenshot_path = PathBuf::from("derby_latest_screenshot.png");
+
+        let screenshot_res = screenshot(screenshot_path);
+        assert!(screenshot_res.is_ok());
+    }
 }
