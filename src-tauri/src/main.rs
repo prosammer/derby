@@ -234,7 +234,7 @@ fn create_transcription_window(app_handle: &AppHandle) -> tauri::Window {
         .hidden_title(true)
         .transparent(true)
         .always_on_top(true)
-        // .inner_size(400.0,400.0)
+        .inner_size(400.0,400.0)
         .build() {
             Ok(window) => {
                 info!("Successfully created transcription_window");
