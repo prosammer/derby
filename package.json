@@ -13,10 +13,13 @@
 		"format": "prettier --plugin-search-dir . --write ."
 	},
 	"devDependencies": {
+		"@skeletonlabs/skeleton": "^2.5.0",
+		"@skeletonlabs/tw-plugin": "^0.2.4",
 		"@sveltejs/adapter-auto": "^2.0.0",
-		"@sveltejs/adapter-static": "^1.0.0-next.50",
+		"@sveltejs/adapter-static": "^1.0.6",
 		"@sveltejs/kit": "^1.20.4",
 		"@tauri-apps/cli": "^1.4.0",
+		"@types/node": "^20.9.0",
 		"@types/recordrtc": "^5.6.11",
 		"@typescript-eslint/eslint-plugin": "^5.62.0",
 		"@typescript-eslint/parser": "^5.62.0",
@@ -43,7 +46,6 @@
 		"clsx": "^2.0.0",
 		"lucide-svelte": "^0.265.0",
 		"radix-svelte": "^0.9.0",
-		"recordrtc": "^5.6.2",
 		"tailwind-merge": "^1.14.0",
 		"tailwindcss-animate": "^1.0.6",
 		"tauri-plugin-autostart-api": "github:tauri-apps/tauri-plugin-autostart#v1",

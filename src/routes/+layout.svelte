@@ -5,6 +5,9 @@
 
 
   let darkMode = false;
+  export const ssr = false;
+  export const prerender = true;
+
   onMount(async() => {
     darkMode = await appWindow.theme() === "dark";
   })

@@ -135,7 +135,7 @@ fn main() {
             let app_handle_clone = app_handle.clone();
             app_handle.manage(TranscriptionState::new());
 
-            // let _window = create_transcription_window(&app_handle);
+            let _window = create_transcription_window(&app_handle);
             let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
             if get_from_store(&app_handle, "first_run").is_none() || is_testing_env {
                 create_first_run_window(&app_handle);
@@ -224,7 +224,7 @@ fn change_transcription_state(app_handle: &AppHandle) {
 
 
 fn create_transcription_window(app_handle: &AppHandle) -> tauri::Window {
-    let new_window = WindowBuilder::new(
+    let new_window = match WindowBuilder::new(
         app_handle,
         "transcription_window",
         WindowUrl::App("transcription".into())
@@ -234,9 +234,18 @@ fn create_transcription_window(app_handle: &AppHandle) -> tauri::Window {
         .hidden_title(true)
         .transparent(true)
         .always_on_top(true)
-        .inner_size(400.0,400.0)
-        .build()
-        .expect("Failed to create transcription_window");
+        // .inner_size(400.0,400.0)
+        .build() {
+            Ok(window) => {
+                info!("Successfully created transcription_window");
+                window
+            },
+            Err(e) => {
+                error!("Failed to create transcription_window: {:?}", e);
+                panic!("Failed to create transcription_window");
+            }
+        };
+
 
     let _ = new_window.move_window(Position::RightCenter);
     new_window
