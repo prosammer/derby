@@ -1,4 +1,5 @@
 import { createClient, LiveTranscriptionEvents } from "@deepgram/sdk";
+import { emit } from '@tauri-apps/api/event';
 
 export default class AudioTranscriber {
   private deepgram: any;
@@ -31,6 +32,7 @@ export default class AudioTranscriber {
 
         if (transcript) {
           console.log("[Speaker:" + speaker + "]" + transcript);
+          emit('transcript', { speaker, transcript });
         } else {
           console.log('Transcript is empty');
         }
