@@ -8,7 +8,69 @@
 
   let audioTranscriber = new AudioTranscriber();
   let isStreaming = false;
+  let elemChat: HTMLElement;
+  let currentSpeaker = 0;
+  let initialMessage: Message = {
+    id: 0,
+    speaker: 0,
+    content: '',
+  };
+  let messageFeed: Message[] = [initialMessage];
 
+
+  interface Word {
+    word: string;
+    start: number;
+    end: number;
+    confidence: number;
+    speaker: number;
+  }
+
+  interface Message {
+    id: number;
+    speaker: number;
+    content: string;
+  }
+
+  const unlisten = listen('transcript', (event: any) => {
+    if (event.payload && Array.isArray(event.payload.words)) {
+      const words: Array<Word> = event.payload.words as Array<Word>;
+      words.forEach(word => {
+        console.log(word.word);
+        if (word.speaker == currentSpeaker) {
+          let lastMessage = messageFeed[messageFeed.length - 1];
+          lastMessage.content += word.word + ' ';
+          messageFeed = [...messageFeed.slice(0, messageFeed.length - 1), lastMessage];
+        } else {
+          addNewMessage(word);
+        }
+      });
+    } else {
+      console.error('event.payload.words is not an array:', event.payload);
+    }
+  });
+
+
+  function addNewMessage(word: Word) {
+    console.log('Adding new message');
+    const newMessage = {
+      id: messageFeed.length,
+      speaker: word.speaker,
+      content: word.word + ' ',
+    };
+    messageFeed = [...messageFeed, newMessage];
+    currentSpeaker = word.speaker;
+    // Smooth scroll to bottom
+    // Timeout prevents race condition
+    setTimeout(() => {
+      scrollChatBottom('smooth');
+    }, 0);
+  }
+
+  // When DOM mounted, scroll to bottom
+  onMount(() => {
+    scrollChatBottom();
+  });
 
   async function toggleStreaming() {
     if (isStreaming) {
@@ -19,29 +81,6 @@
     isStreaming = !isStreaming;
   }
 
-  interface TranscriptEventPayload {
-    bot: boolean;
-    transcript: string;
-  }
-
-  const unlisten = listen('transcript', (event) => {
-    const { bot, transcript } = event.payload as TranscriptEventPayload;
-    addMessage(bot, transcript);
-  });
-
-  interface MessageFeed {
-    id: number;
-    bot: boolean;
-    name: string;
-    message: string;
-    color: string;
-  }
-
-  let elemChat: HTMLElement;
-
-  // Messages
-  let messageFeed: MessageFeed[] = [];
-  let currentMessage = '';
 
   // For some reason, eslint thinks ScrollBehavior is undefined...
   // eslint-disable-next-line no-undef
@@ -52,35 +91,6 @@
   function getCurrentTimestamp(): string {
     return new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
   }
-
-  function addMessage(speaker: boolean, transcript: string): void {
-    const newMessage = {
-      id: messageFeed.length,
-      bot: speaker,
-      name: 'Jane',
-      timestamp: `Today @ ${getCurrentTimestamp()}`,
-      message: transcript,
-      color: 'variant-soft-primary'
-    };
-    // Update the message feed
-    messageFeed = [...messageFeed, newMessage];
-    // Clear prompt
-    currentMessage = '';
-    // Smooth scroll to bottom
-    // Timeout prevents race condition
-    setTimeout(() => {
-      scrollChatBottom('smooth');
-    }, 0);
-  }
-
-  function onSend() {
-    addMessage(false, "dummy text");
-  }
-
-  // When DOM mounted, scroll to bottom
-  onMount(() => {
-    scrollChatBottom();
-  });
 </script>
 <AudioTranscriberButton {isStreaming} on:toggle={() => toggleStreaming()} />
 
@@ -91,11 +101,12 @@
       <!-- Conversation -->
       <section bind:this={elemChat} class="max-h-[500px] p-4 overflow-y-auto space-y-4">
         {#each messageFeed as bubble (bubble.id)}
+          <p>Bubble:</p>
           <ChatBubble {bubble} />
         {/each}
       </section>
       <!-- Prompt -->
-      <ChatInput bind:currentMessage={currentMessage} on:send={() => onSend()} />
+<!--      <ChatInput bind:currentMessage={currentMessage} on:send={() => onSend()} />-->
     </div>
   </div>
 </section>

@@ -13,7 +13,10 @@ export default class AudioTranscriber {
   async streamAudio(stream: MediaStream) {
     console.log('streamAudio called', stream);
 
-    this.dgConnection = this.deepgram.listen.live({ model: "nova" });
+    this.dgConnection = this.deepgram.listen.live({
+      model: "nova",
+      diarize: true,
+    });
 
     this.mediaRecorder = new MediaRecorder(stream)
 
@@ -27,12 +30,9 @@ export default class AudioTranscriber {
       });
 
       this.dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
-        const transcript = data.channel.alternatives[0].transcript;
-        const speaker = data.channel.alternatives[0].words.speaker;
-
-        if (transcript) {
-          console.log("[Speaker:" + speaker + "]" + transcript);
-          emit('transcript', { speaker, transcript });
+        const words = data.channel.alternatives[0].words;
+        if (words.length > 0) {
+          emit('transcript', { words });
         } else {
           console.log('Transcript is empty');
         }
