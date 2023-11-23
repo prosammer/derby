@@ -4,6 +4,17 @@
   import { listen } from '@tauri-apps/api/event';
 
   let audioTranscriber = new AudioTranscriber();
+  let isStreaming = false;
+
+
+  async function toggleStreaming() {
+    if (isStreaming) {
+      await audioTranscriber.stopAudioCapture();
+    } else {
+      await audioTranscriber.startAudioCapture();
+    }
+    isStreaming = !isStreaming;
+  }
 
   interface TranscriptEventPayload {
     bot: boolean;
@@ -14,10 +25,6 @@
     const { bot, transcript } = event.payload as TranscriptEventPayload;
     addMessage(bot, transcript);
   });
-
-  async function startAudioCapture() {
-    await audioTranscriber.startAudioCapture();
-  }
 
   interface MessageFeed {
     id: number;
@@ -30,36 +37,7 @@
   let elemChat: HTMLElement;
 
   // Messages
-  let messageFeed: MessageFeed[] = [
-    {
-      id: 0,
-      bot: true,
-      name: 'Jane',
-      message: "Test Message",
-      color: 'variant-soft-primary'
-    },
-    {
-      id: 1,
-      bot: false,
-      name: 'Michael',
-      message: "Test Message",
-      color: 'variant-soft-primary'
-    },
-    {
-      id: 2,
-      bot: true,
-      name: 'Jane',
-      message: "Test Message",
-      color: 'variant-soft-primary'
-    },
-    {
-      id: 3,
-      bot: false,
-      name: 'Michael',
-      message: "Test Message",
-      color: 'variant-soft-primary'
-    }
-  ];
+  let messageFeed: MessageFeed[] = [];
   let currentMessage = '';
 
   // For some reason, eslint thinks ScrollBehavior is undefined...
@@ -88,7 +66,7 @@
     // Smooth scroll to bottom
     // Timeout prevents race condition
     setTimeout(() => {
-      // scrollChatBottom('smooth');
+      scrollChatBottom('smooth');
     }, 0);
   }
 
@@ -104,7 +82,9 @@
     scrollChatBottom();
   });
 </script>
-<button class="btn variant-filled" on:click={() => startAudioCapture()}>Start</button>
+<button class="btn variant-filled" on:click={() => toggleStreaming()}>
+  {isStreaming ? 'Stop' : 'Start'} Streaming
+</button>
 <section class="card">
   <div class="chat w-full h-full grid grid-cols-1 lg:grid-cols-[30%_1fr]">
     <!-- Chat -->

@@ -56,4 +56,19 @@ export default class AudioTranscriber {
       .then(stream => this.streamAudio(stream))
       .catch(error => this.handleError(error));
   }
+
+  async stopAudioCapture() {
+    console.log('stopAudioCapture called');
+    // Stop the MediaRecorder
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
+      this.mediaRecorder = null;
+    }
+
+    // Close the Deepgram connection
+    if (this.dgConnection) {
+      this.dgConnection.close();
+      this.dgConnection = null;
+    }
+  }
 }
