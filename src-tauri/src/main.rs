@@ -135,7 +135,7 @@ fn main() {
             let app_handle_clone = app_handle.clone();
             app_handle.manage(TranscriptionState::new());
 
-            // let _window = create_transcription_window(&app_handle);
+            let _window = create_tester_window(&app_handle);
             let is_testing_env = env::var("TESTING_ENV").map(|val| val == "true").unwrap_or(false);
             if get_from_store(&app_handle, "first_run").is_none() || is_testing_env {
                 create_first_run_window(&app_handle);
@@ -220,6 +220,19 @@ fn change_transcription_state(app_handle: &AppHandle) {
     info!("Changing mode from {:?} to {:?}", current_mode, next_mode);
     app_state.set_mode(next_mode, &app_handle);
 
+}
+
+fn create_tester_window(app_handle: &AppHandle) -> tauri::Window {
+    let new_window = WindowBuilder::new(
+        app_handle,
+        "tester_window",
+        WindowUrl::App("tester".into())
+    )
+        .build()
+        .expect("Failed to create transcription_window");
+
+    let _ = new_window.move_window(Position::RightCenter);
+    new_window
 }
 
 
