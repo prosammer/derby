@@ -5,6 +5,8 @@
   import AudioTranscriberButton from "$components/AudioTranscriberButton.svelte";
   import ChatBubble from "$components/ChatBubble.svelte";
   import ChatInput from "$components/ChatInput.svelte";
+	import { writable } from 'svelte/store';
+  import type { Message } from "$lib/types/message";
 
   let audioTranscriber = new AudioTranscriber();
   let isStreaming = false;
@@ -15,7 +17,8 @@
     speaker: 0,
     content: '',
   };
-  let messageFeed: Message[] = [initialMessage];
+  let messageFeed = writable<Message[]>([initialMessage]);
+
 
 
   interface Word {
@@ -26,21 +29,15 @@
     speaker: number;
   }
 
-  interface Message {
-    id: number;
-    speaker: number;
-    content: string;
-  }
-
   const unlisten = listen('transcript', (event: any) => {
     if (event.payload && Array.isArray(event.payload.words)) {
       const words: Array<Word> = event.payload.words as Array<Word>;
       words.forEach(word => {
-        console.log(word.word);
+        console.log(word.speaker + ": " + word.word);
         if (word.speaker == currentSpeaker) {
-          let lastMessage = messageFeed[messageFeed.length - 1];
+          let lastMessage = $messageFeed[$messageFeed.length - 1];
           lastMessage.content += word.word + ' ';
-          messageFeed = [...messageFeed.slice(0, messageFeed.length - 1), lastMessage];
+          $messageFeed = $messageFeed;
         } else {
           addNewMessage(word);
         }
@@ -54,11 +51,11 @@
   function addNewMessage(word: Word) {
     console.log('Adding new message');
     const newMessage = {
-      id: messageFeed.length,
+      id: $messageFeed.length,
       speaker: word.speaker,
       content: word.word + ' ',
     };
-    messageFeed = [...messageFeed, newMessage];
+    $messageFeed = [...$messageFeed, newMessage];
     currentSpeaker = word.speaker;
     // Smooth scroll to bottom
     // Timeout prevents race condition
@@ -100,7 +97,7 @@
     <div class="grid grid-row-[1fr_auto]">
       <!-- Conversation -->
       <section bind:this={elemChat} class="max-h-[500px] p-4 overflow-y-auto space-y-4">
-        {#each messageFeed as bubble (bubble.id)}
+        {#each $messageFeed as bubble (bubble.id)}
           <p>Bubble:</p>
           <ChatBubble {bubble} />
         {/each}
