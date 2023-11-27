@@ -41,10 +41,12 @@
 	"dependencies": {
 		"@deepgram/sdk": "^3.0.0-beta.4",
 		"@tauri-apps/api": "^1.4.0",
+		"ai": "^2.2.25",
 		"bits-ui": "^0.9.2",
 		"class-variance-authority": "^0.7.0",
 		"clsx": "^2.0.0",
 		"lucide-svelte": "^0.265.0",
+		"openai": "^4.20.0",
 		"radix-svelte": "^0.9.0",
 		"recordrtc": "^5.6.2",
 		"tailwind-merge": "^1.14.0",

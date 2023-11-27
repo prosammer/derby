@@ -1,19 +1,14 @@
 import { createClient, LiveTranscriptionEvents } from "@deepgram/sdk";
 import { emit } from '@tauri-apps/api/event';
 import { info } from "tauri-plugin-log-api";
-import { readEnvVariable } from "$lib/utils";
 
 export default class AudioTranscriber {
   private deepgram: any;
   private dgConnection: any;
   private mediaRecorder: any;
 
-  constructor() {
-    readEnvVariable('DEEPGRAM_API_KEY').then((apiKey) => {
-      this.deepgram = createClient(apiKey);
-    }).catch((error) => {
-      throw new Error(error);
-    });
+  constructor(apiKey: string) {
+    this.deepgram = createClient(apiKey);
   }
 
   async streamAudio(stream: MediaStream) {

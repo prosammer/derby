@@ -3,34 +3,54 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import ChatBubble from "$components/ChatBubble.svelte";
-  import { writable } from "svelte/store";
-  import type { Message } from "$lib/types/message";
   import type { Word } from "$lib/types/word";
-  import { error, info } from "tauri-plugin-log-api";
   import { Mic, Send, Disc3 } from "lucide-svelte";
   import { appWindow, LogicalSize } from "@tauri-apps/api/window";
+  import { readEnvVariable } from "$lib/utils";
+  import OpenAI from 'openai';
+  import { writable } from "svelte/store";
 
-  let audioTranscriber = new AudioTranscriber();
+  let OPENAI_API_KEY: string;
+  let DEEPGRAM_API_KEY: string;
+
+  interface Message {
+    id: string;
+    content: string;
+    ui?: string;
+    role: 'system' | 'user' | 'assistant' | 'function';
+    name?: string;
+    function_call?: string;
+  }
+
+
+  let openai: OpenAI;
+  let input = writable('');
+  let initialMessage: Message =  {
+    id: '0',
+    content: '',
+    role: 'user'
+  }
+  let messages = writable<Message[]>([initialMessage]);
+  let audioTranscriber: AudioTranscriber;
   let isStreaming = false;
   let elemChat: HTMLElement;
-  let currentSpeaker = 0;
-  let currentMessage: Message = {
-    id: 2,
-    speaker: 0,
-    content: '',
-    color: 'variant-soft-primary',
-  };
-  let messageFeed = writable<Message[]>([]);
 
-
-  $: if($messageFeed.length > 0) {
+  $: if($messages && $messages.length > 0) {
     resizeWindowToFitMessages();
   }
 
   // When DOM mounted, scroll to bottom
-  onMount(() => {
+  onMount(async () => {
     scrollChatBottom();
-    processTranscript();
+    OPENAI_API_KEY = await readEnvVariable("OPENAI_API_KEY");
+    DEEPGRAM_API_KEY = await readEnvVariable('DEEPGRAM_API_KEY');
+    audioTranscriber = new AudioTranscriber(DEEPGRAM_API_KEY);
+    openai = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+      dangerouslyAllowBrowser: true
+    })
+    // input, handleSubmit, messages = useChat();
+    await processTranscript();
   });
 
   async function resizeWindowToFitMessages() {
@@ -46,57 +66,44 @@
       if (event.payload && Array.isArray(event.payload.words)) {
         const words: Array<Word> = event.payload.words as Array<Word>;
         words.forEach(word => {
-          info(word.speaker + ": " + word.word);
-          if (word.speaker == currentSpeaker) {
-            currentMessage.content += word.word + ' ';
-          } else {
-            submitCurrentMessage();
-            currentMessage = {
-              id: currentMessage.id + 1,
-              speaker: word.speaker,
-              content: word.word + ' ',
-              color: 'variant-soft-primary',
-            };
-          }
+          input.update(value => value + ' ' + word.word);
         });
-      } else {
-        error('event.payload.words is not an array:', event.payload);
       }
-    });
+    })
   }
 
-
-  function createMessage(speaker: number, content = ''): Message {
-    return {
-      id: currentMessage.id + 1,
-      speaker: speaker,
-      content: content,
-      color: 'variant-soft-primary',
-    };
-  }
-
-
-  async function submitCurrentMessage() {
-    await info('Adding new message');
-
-    $messageFeed = [...$messageFeed, { ...currentMessage }];
-    currentMessage = createMessage(currentMessage.speaker === 0 ? 1 : 0);
-
-    if ($messageFeed.length === 1) {
-      try {
-        await appWindow.setSize(new LogicalSize(400, 400));
-      } catch (err) {
-        await error('Error resizing window:', err);
-      }
+  async function handleSubmit() {
+    let newMessage: Message = {
+      id: $messages.length.toString(),
+      content: $input,
+      role: "user",
     }
-    // Smooth scroll to bottom
-    // Timeout prevents race condition
-    setTimeout(() => {
-      scrollChatBottom('smooth');
-    }, 0);
+
+    $messages.push(newMessage);
+    input.set("");
+
+    const stream = openai.beta.chat.completions.stream({
+      model: 'gpt-4',
+      messages: $messages.map(message => ({
+        role: message.role,
+        content: message.content
+      })),
+      stream: true,
+    });
+
+    let responseMessage: Message = {
+      id: $messages.length.toString(),
+      content: '',
+      role: 'assistant'
+    }
+    $messages.push(responseMessage);
+
+    stream.on('content', (delta, snapshot) => {
+      $messages[$messages.length - 1].content += delta;
+    });
+
+
   }
-
-
 
   async function toggleStreaming() {
     if (isStreaming) {
@@ -107,18 +114,16 @@
     isStreaming = !isStreaming;
   }
 
-
-  function onPromptKeydown(event: KeyboardEvent): void {
-    if (['Enter'].includes(event.code)) {
-      event.preventDefault();
-      submitCurrentMessage();
-    }
-  }
-
   // For some reason, eslint thinks ScrollBehavior is undefined...
   // eslint-disable-next-line no-undef
   function scrollChatBottom(behavior?: ScrollBehavior): void {
     elemChat.scrollTo({ top: elemChat.scrollHeight, behavior });
+  }
+
+  function handleInputEvent(event: { key: any }) {
+    if (event.key == "Enter") {
+      handleSubmit();
+    }
   }
 </script>
 
@@ -128,9 +133,11 @@
     <div class="grid grid-row-[1fr_auto]">
       <!-- Conversation -->
       <section bind:this={elemChat} class="max-h-[400px] p-4 overflow-y-auto space-y-4">
-        {#each $messageFeed as bubble}
-          <ChatBubble {bubble} />
+        {#if $messages}
+        {#each $messages as message}
+          <ChatBubble {message} />
         {/each}
+        {/if}
       </section>
       <!-- Prompt -->
       <section class="border-t border-surface-500/30 p-4">
@@ -142,16 +149,16 @@
               <Mic size="16"/>
             {/if}
           </button>
-          <textarea
-            bind:value={currentMessage.content}
+          <input
+            type="text"
+            bind:value={$input}
             class="bg-transparent border-0 ring-0 text-surface-100"
             name="prompt"
             id="prompt"
             placeholder="Write a message..."
-            rows="1"
-            on:keydown={onPromptKeydown}
+            on:keydown={handleInputEvent}
           />
-          <button class="{currentMessage.content ? 'variant-filled-primary' : 'input-group-shim'}" on:click={() => submitCurrentMessage()}>
+          <button class="{$input ? 'variant-filled-primary' : 'input-group-shim'}"  on:click={() => handleSubmit()}>
             <Send size="16"/>
           </button>
         </div>
