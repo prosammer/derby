@@ -228,6 +228,11 @@ fn create_tester_window(app_handle: &AppHandle) -> tauri::Window {
         "tester_window",
         WindowUrl::App("tester".into())
     )
+        .title_bar_style(Transparent)
+        .hidden_title(true)
+        .transparent(true)
+        .always_on_top(true)
+        .inner_size(400.0,100.0)
         .build()
         .expect("Failed to create transcription_window");
 

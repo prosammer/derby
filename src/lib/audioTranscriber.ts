@@ -1,5 +1,6 @@
 import { createClient, LiveTranscriptionEvents } from "@deepgram/sdk";
 import { emit } from '@tauri-apps/api/event';
+import { info } from "tauri-plugin-log-api";
 
 export default class AudioTranscriber {
   private deepgram: any;
@@ -11,7 +12,7 @@ export default class AudioTranscriber {
   }
 
   async streamAudio(stream: MediaStream) {
-    await console.log('streamAudio called');
+    await info("streamAudio called");
 
     this.dgConnection = this.deepgram.listen.live({
       model: "nova",
@@ -20,21 +21,23 @@ export default class AudioTranscriber {
 
     this.mediaRecorder = new MediaRecorder(stream)
 
-    this.mediaRecorder.addEventListener('dataavailable', async (event) => {
+    this.mediaRecorder.addEventListener('dataavailable', async (event: { data: any; }) => {
       this.dgConnection.send(event.data)
     })
 
     this.dgConnection.on(LiveTranscriptionEvents.Open, () => {
+      info("Connection opened.");
+
       this.dgConnection.on(LiveTranscriptionEvents.Close, () => {
-        console.log("Connection closed.");
+        info("Connection closed.");
       });
 
-      this.dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+      this.dgConnection.on(LiveTranscriptionEvents.Transcript, (data: { channel: { alternatives: { words: any; }[]; }; }) => {
         const words = data.channel.alternatives[0].words;
         if (words.length > 0) {
           emit('transcript', { words });
         } else {
-          console.log('Transcript is empty');
+          info('Transcript is empty');
         }
       });
     });
@@ -43,14 +46,14 @@ export default class AudioTranscriber {
   }
 
   async handleError(error: Error) {
-    console.log('handleError called', error);
+    await info('handleError called', error);
     const errorMessage =
       "navigator.MediaDevices.getUserMedia error: " + error.message;
     console.error(errorMessage);
   }
 
   async startAudioCapture() {
-    console.log('startAudioCapture called');
+    await info('startAudioCapture called');
     window.navigator.mediaDevices
       .getUserMedia({ audio: true })
       .then(stream => this.streamAudio(stream))
@@ -58,7 +61,7 @@ export default class AudioTranscriber {
   }
 
   async stopAudioCapture() {
-    info('stopAudioCapture called');
+    await info('stopAudioCapture called');
     // Stop the MediaRecorder
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
