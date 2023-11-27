@@ -1,6 +1,7 @@
 import { createClient, LiveTranscriptionEvents } from "@deepgram/sdk";
 import { emit } from '@tauri-apps/api/event';
 import { info } from "tauri-plugin-log-api";
+import { readEnvVariable } from "$lib/utils";
 
 export default class AudioTranscriber {
   private deepgram: any;
@@ -8,7 +9,11 @@ export default class AudioTranscriber {
   private mediaRecorder: any;
 
   constructor() {
-    this.deepgram = createClient("6de4cf30c6d3833653106fe2d937c1cbf0c3d8a7");
+    readEnvVariable('DEEPGRAM_API_KEY').then((apiKey) => {
+      this.deepgram = createClient(apiKey);
+    }).catch((error) => {
+      throw new Error(error);
+    });
   }
 
   async streamAudio(stream: MediaStream) {
@@ -62,13 +67,11 @@ export default class AudioTranscriber {
 
   async stopAudioCapture() {
     await info('stopAudioCapture called');
-    // Stop the MediaRecorder
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
       this.mediaRecorder = null;
     }
 
-    // Close the Deepgram connection
     if (this.dgConnection) {
       this.dgConnection.close();
       this.dgConnection = null;
