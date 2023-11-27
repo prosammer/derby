@@ -11,7 +11,7 @@ export default class AudioTranscriber {
   }
 
   async streamAudio(stream: MediaStream) {
-    console.log('streamAudio called', stream);
+    await console.log('streamAudio called');
 
     this.dgConnection = this.deepgram.listen.live({
       model: "nova",
@@ -58,7 +58,7 @@ export default class AudioTranscriber {
   }
 
   async stopAudioCapture() {
-    console.log('stopAudioCapture called');
+    info('stopAudioCapture called');
     // Stop the MediaRecorder
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
