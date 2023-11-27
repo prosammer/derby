@@ -14,10 +14,24 @@
   let isStreaming = false;
   let elemChat: HTMLElement;
   let currentSpeaker = 0;
+  let currentMessage: Message = {
+    id: 2,
+    speaker: 0,
+    content: '',
+    color: 'variant-soft-primary',
+  };
+  let messageFeed = writable<Message[]>([]);
+
 
   $: if($messageFeed.length > 0) {
     resizeWindowToFitMessages();
   }
+
+  // When DOM mounted, scroll to bottom
+  onMount(() => {
+    scrollChatBottom();
+    processTranscript();
+  });
 
   async function resizeWindowToFitMessages() {
     const newHeight =  400;
@@ -27,37 +41,30 @@
     await appWindow.setSize(new LogicalSize(logicalSize.width, newHeight));
   }
 
-  let currentMessage: Message = {
-    id: 2,
-    speaker: 0,
-    content: '',
-    color: 'variant-soft-primary',
-  };
+  function processTranscript() {
+    return listen('transcript', (event: any) => {
+      if (event.payload && Array.isArray(event.payload.words)) {
+        const words: Array<Word> = event.payload.words as Array<Word>;
+        words.forEach(word => {
+          info(word.speaker + ": " + word.word);
+          if (word.speaker == currentSpeaker) {
+            currentMessage.content += word.word + ' ';
+          } else {
+            submitCurrentMessage();
+            currentMessage = {
+              id: currentMessage.id + 1,
+              speaker: word.speaker,
+              content: word.word + ' ',
+              color: 'variant-soft-primary',
+            };
+          }
+        });
+      } else {
+        error('event.payload.words is not an array:', event.payload);
+      }
+    });
+  }
 
-  let messageFeed = writable<Message[]>([]);
-
-
-  const unlisten = listen('transcript', (event: any) => {
-    if (event.payload && Array.isArray(event.payload.words)) {
-      const words: Array<Word> = event.payload.words as Array<Word>;
-      words.forEach(word => {
-        info(word.speaker + ": " + word.word);
-        if (word.speaker == currentSpeaker) {
-          currentMessage.content += word.word + ' ';
-        } else {
-          submitCurrentMessage();
-          currentMessage = {
-            id: currentMessage.id + 1,
-            speaker: word.speaker,
-            content: word.word + ' ',
-            color: 'variant-soft-primary',
-          };
-        }
-      });
-    } else {
-      error('event.payload.words is not an array:', event.payload);
-    }
-  });
 
   function createMessage(speaker: number, content = ''): Message {
     return {
@@ -89,10 +96,7 @@
     }, 0);
   }
 
-  // When DOM mounted, scroll to bottom
-  onMount(() => {
-    scrollChatBottom();
-  });
+
 
   async function toggleStreaming() {
     if (isStreaming) {
