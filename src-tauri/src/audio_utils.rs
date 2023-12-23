@@ -5,7 +5,6 @@ use std::io::{Cursor, Read};
 use std::path::PathBuf;
 use log::info;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
-use crate::whisper::AudioRecording;
 
 pub const TARGET_SAMPLE_RATE: usize = 16000;
 fn _clamp(value: f32, min: f32, max: f32) -> f32 {

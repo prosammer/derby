@@ -2,9 +2,6 @@ import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/kit/vite';
 /** @type {import('@sveltejs/kit').Config}*/
 const config = {
-	optimizeDeps: {
-		include: ['recordrtc']
-	},
 	preprocess: [vitePreprocess({})],
 	kit: {
 		// adapter-auto only supports some environments, see https://kit.svelte.dev/docs/adapter-auto for a list.

@@ -1,128 +1,168 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { listen } from '@tauri-apps/api/event';
-  import { writeText } from '@tauri-apps/api/clipboard';
-  import { appWindow } from "@tauri-apps/api/window";
+  import AudioTranscriber from "$lib/audioTranscriber";
+  import { onMount } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import ChatBubble from "$components/ChatBubble.svelte";
+  import type { Word } from "$lib/types/word";
+  import { Mic, Send, Disc3 } from "lucide-svelte";
+  import { appWindow, LogicalSize } from "@tauri-apps/api/window";
+  import { readEnvVariable } from "$lib/utils";
+  import OpenAI from 'openai';
+  import { writable } from "svelte/store";
 
-  let gptContent = '';
-  let hasCopied = false;
-  let isNewMessage = false;
-  let typingAnimation = false;
+  let OPENAI_API_KEY: string;
+  let DEEPGRAM_API_KEY: string;
 
-  onMount(() => {
-    let unlistenChunks: () => void;
-    let unlistenStart: () => void;
-    typingAnimation = true;
-
-    (async () => {
-        unlistenStart = await listen('gpt_stream_start', () => {
-          console.log('New stream event received');
-          isNewMessage = true; // Set the flag when a new stream starts
-        });
-
-      unlistenChunks = await listen('gpt_chunk_received', (event) => {
-        if (isNewMessage) {
-          gptContent = ''; // Clear the content if the previous stream was complete
-          isNewMessage = false;
-        }
-        if (typeof event.payload === 'string') {
-          gptContent += event.payload;
-          typingAnimation = false;
-        } else {
-          console.error('Received non-string payload', event.payload);
-        }
-      });
-    })();
-
-    return () => {
-      // Clean up the event listener when the component is unmounted
-      if (unlistenChunks) unlistenChunks();
-      if (unlistenStart) unlistenStart();
-    };
-  });
-
-  function closeModal() {
-    appWindow.close();
+  interface Message {
+    id: string;
+    content: string;
+    ui?: string;
+    role: 'system' | 'user' | 'assistant' | 'function';
+    name?: string;
+    function_call?: string;
   }
 
-  async function copyToClipboard() {
-    try {
-      await writeText(gptContent);
-      hasCopied = true;
-      console.log('Content copied to clipboard');
 
-      setTimeout(() => {
-        hasCopied = false;
-      }, 1000);
-    } catch (error) {
-      console.error('Failed to copy content to clipboard', error);
+  let openai: OpenAI;
+  let input = writable('');
+  let initialMessage: Message =  {
+    id: '0',
+    content: '',
+    role: 'user'
+  }
+  let messages = writable<Message[]>([initialMessage]);
+  let audioTranscriber: AudioTranscriber;
+  let isStreaming = false;
+  let elemChat: HTMLElement;
+
+  $: if($messages && $messages.length > 0) {
+    resizeWindowToFitMessages();
+  }
+
+  // When DOM mounted, scroll to bottom
+  onMount(async () => {
+    scrollChatBottom();
+    OPENAI_API_KEY = await readEnvVariable("OPENAI_API_KEY");
+    DEEPGRAM_API_KEY = await readEnvVariable('DEEPGRAM_API_KEY');
+    audioTranscriber = new AudioTranscriber(DEEPGRAM_API_KEY);
+    openai = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+      dangerouslyAllowBrowser: true
+    })
+    // input, handleSubmit, messages = useChat();
+    await processTranscript();
+  });
+
+  async function resizeWindowToFitMessages() {
+    const newHeight =  400;
+    const currentSize = await appWindow.innerSize();
+    const factor = await appWindow.scaleFactor();
+    const logicalSize = currentSize.toLogical(factor);
+    await appWindow.setSize(new LogicalSize(logicalSize.width, newHeight));
+  }
+
+  function processTranscript() {
+    return listen('transcript', (event: any) => {
+      if (event.payload && Array.isArray(event.payload.words)) {
+        const words: Array<Word> = event.payload.words as Array<Word>;
+        words.forEach(word => {
+          input.update(value => value + ' ' + word.word);
+        });
+      }
+    })
+  }
+
+  async function handleSubmit() {
+    let newMessage: Message = {
+      id: $messages.length.toString(),
+      content: $input,
+      role: "user",
+    }
+
+    $messages.push(newMessage);
+    input.set("");
+
+    const stream = openai.beta.chat.completions.stream({
+      model: 'gpt-4',
+      messages: $messages.map(message => ({
+        role: message.role,
+        content: message.content
+      })),
+      stream: true,
+    });
+
+    let responseMessage: Message = {
+      id: $messages.length.toString(),
+      content: '',
+      role: 'assistant'
+    }
+    $messages.push(responseMessage);
+
+    stream.on('content', (delta, snapshot) => {
+      $messages[$messages.length - 1].content += delta;
+    });
+
+
+  }
+
+  async function toggleStreaming() {
+    if (isStreaming) {
+      await audioTranscriber.stopAudioCapture();
+    } else {
+      await audioTranscriber.startAudioCapture();
+    }
+    isStreaming = !isStreaming;
+  }
+
+  // For some reason, eslint thinks ScrollBehavior is undefined...
+  // eslint-disable-next-line no-undef
+  function scrollChatBottom(behavior?: ScrollBehavior): void {
+    elemChat.scrollTo({ top: elemChat.scrollHeight, behavior });
+  }
+
+  function handleInputEvent(event: { key: any }) {
+    if (event.key == "Enter") {
+      handleSubmit();
     }
   }
 </script>
 
-<div class="bg-[#07323A]/50 p-2">
-  <div data-tauri-drag-region class="flex justify-between">
-    <svg on:click={closeModal} class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="gray" >
-      <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-    <svg on:click={copyToClipboard} class:scale-110={hasCopied} class:rotate-scale-up={hasCopied} class="w-5 h-5 cursor-pointer transition duration-150 ease-in-out"  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="gray" >
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-    </svg>
+<section class="card opacity-90">
+  <div class="chat w-full h-full grid grid-cols-1 lg:grid-cols-[30%_1fr]">
+    <!-- Chat -->
+    <div class="grid grid-row-[1fr_auto]">
+      <!-- Conversation -->
+      <section bind:this={elemChat} class="max-h-[400px] p-4 overflow-y-auto space-y-4">
+        {#if $messages}
+        {#each $messages as message}
+          <ChatBubble {message} />
+        {/each}
+        {/if}
+      </section>
+      <!-- Prompt -->
+      <section class="border-t border-surface-500/30 p-4">
+        <div class="input-group input-group-divider grid-cols-[auto_1fr_auto] rounded-container-token">
+          <button class="input-group-shim" on:click={() => toggleStreaming()}>
+            {#if isStreaming}
+              <Disc3 size="16"/>
+            {:else}
+              <Mic size="16"/>
+            {/if}
+          </button>
+          <input
+            type="text"
+            bind:value={$input}
+            class="bg-transparent border-0 ring-0 text-surface-100"
+            name="prompt"
+            id="prompt"
+            placeholder="Write a message..."
+            on:keydown={handleInputEvent}
+          />
+          <button class="{$input ? 'variant-filled-primary' : 'input-group-shim'}"  on:click={() => handleSubmit()}>
+            <Send size="16"/>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
-  <div class="col-span-full text-center text-sm text-[#FDF7E3] h-64 overflow-auto">
-    {#if typingAnimation}
-      <div class="typing-animation text-[#FDF7E3]">
-        <div class="dot">.</div>
-        <div class="dot">.</div>
-        <div class="dot">.</div>
-      </div>
-    {/if}
-    {gptContent}
-  </div>
-</div>
-<style>
-    @keyframes rotate-scale-up {
-        0% {
-            transform: scale(1) rotateZ(0);
-        }
-        50% {
-            transform: scale(2) rotateZ(140deg);
-        }
-        100% {
-            transform: scale(1) rotateZ(0deg);
-        }
-    }
-
-    .rotate-scale-up {
-        animation: rotate-scale-up 0.3s ease-in-out forwards;
-    }
-
-    .typing-animation {
-        display: flex;
-        align-items: center;
-    }
-
-    .dot {
-        border-radius: 50%;
-        height: 3px;
-        margin: 0 2px;
-        animation: dot-wave 1.5s infinite;
-    }
-
-    .dot:nth-child(1) { animation-delay: 0s; }
-    .dot:nth-child(2) { animation-delay: 0.15s; }
-    .dot:nth-child(3) { animation-delay: 0.3s; }
-
-    /* Keyframes for the wave animation */
-    @keyframes dot-wave {
-        0%, 60%, 100% {
-            transform: translateY(0);
-            transform: scale(1);
-        }
-        30% {
-            transform: translateY(-15px);
-            transform: scale(1.2);
-        }
-    }
-
-</style>
+</section>
